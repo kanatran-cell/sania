@@ -1,25 +1,54 @@
-import { View, Text, Pressable, FlatList, Image, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  Image,
+  ScrollView,
+  useColorScheme,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  SlideInRight,
+} from "react-native-reanimated";
 import { useProductStore } from "../stores/useProductStore";
 import { getHealthColor, getHealthLabel } from "../constants/theme";
 import type { ProductAnalysis } from "../types/product";
 
 export default function ResultsScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+
   const analysisResult = useProductStore((s) => s.analysisResult);
   const scannedProducts = useProductStore((s) => s.scannedProducts);
   const reset = useProductStore((s) => s.reset);
 
+  const bg = isDark ? "bg-slate-900" : "bg-gray-50";
+  const cardBg = isDark ? "bg-slate-800" : "bg-white";
+  const textPrimary = isDark ? "text-white" : "text-text-primary";
+  const textSecondary = isDark ? "text-slate-400" : "text-text-secondary";
+  const borderColor = isDark ? "border-slate-700" : "border-gray-100";
+
   if (!analysisResult) {
     return (
-      <SafeAreaView className="flex-1 bg-white justify-center items-center">
-        <Text className="text-text-secondary text-lg">
+      <SafeAreaView
+        className={`flex-1 ${bg} justify-center items-center px-8`}
+      >
+        <Ionicons
+          name="alert-circle-outline"
+          size={48}
+          color={isDark ? "#64748B" : "#94A3B8"}
+        />
+        <Text className={`${textSecondary} text-lg mt-4 text-center`}>
           No hay resultados disponibles
         </Text>
         <Pressable
-          className="mt-4 bg-primary px-6 py-3 rounded-xl"
+          className="mt-6 bg-primary px-8 py-3 rounded-2xl"
           onPress={() => router.replace("/")}
         >
           <Text className="text-white font-semibold">Volver al inicio</Text>
@@ -48,18 +77,24 @@ export default function ResultsScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className={`flex-1 ${bg}`}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
+      <View
+        className={`flex-row items-center justify-between px-4 py-3 ${cardBg} border-b ${borderColor}`}
+      >
         <Pressable
           onPress={() => router.back()}
           className="p-2"
           accessibilityRole="button"
           accessibilityLabel="Volver"
         >
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color={isDark ? "#E2E8F0" : "#0F172A"}
+          />
         </Pressable>
-        <Text className="text-lg font-semibold text-text-primary">
+        <Text className={`text-lg font-semibold ${textPrimary}`}>
           Resultados
         </Text>
         <View className="w-10" />
@@ -68,115 +103,160 @@ export default function ResultsScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Winner Card */}
         {winner && (
-          <View className="mx-4 mt-4 bg-white rounded-2xl p-6 shadow-sm border-2 border-success">
+          <Animated.View
+            entering={FadeInDown.duration(600).springify()}
+            className={`mx-4 mt-4 ${cardBg} rounded-3xl p-6 shadow-md border-2 border-success`}
+          >
             <View className="items-center">
-              <View className="bg-success/10 rounded-full px-4 py-1 mb-4">
+              {/* Badge */}
+              <Animated.View
+                entering={FadeIn.duration(400).delay(300)}
+                className="bg-success/10 rounded-full px-5 py-1.5 mb-4"
+              >
                 <View className="flex-row items-center">
                   <Ionicons name="trophy" size={16} color="#22C55E" />
-                  <Text className="text-success font-bold ml-1">
-                    MÁS SALUDABLE
+                  <Text className="text-success font-bold ml-1.5 text-sm">
+                    MAS SALUDABLE
                   </Text>
                 </View>
-              </View>
+              </Animated.View>
 
               {winnerImage && (
-                <Image
-                  source={{ uri: winnerImage.imageUri }}
-                  className="w-28 h-28 rounded-xl mb-4"
-                  accessibilityLabel={`Producto ganador: ${winner.name}`}
-                />
+                <Animated.View entering={FadeIn.duration(500).delay(200)}>
+                  <Image
+                    source={{ uri: winnerImage.imageUri }}
+                    className="w-32 h-32 rounded-2xl mb-4"
+                    accessibilityLabel={`Producto ganador: ${winner.name}`}
+                  />
+                </Animated.View>
               )}
 
-              <Text className="text-2xl font-bold text-text-primary text-center">
+              <Text
+                className={`text-2xl font-bold ${textPrimary} text-center`}
+              >
                 {winner.name}
               </Text>
-              <Text className="text-text-secondary text-base mb-4">
+              <Text className={`${textSecondary} text-base mb-4`}>
                 {winner.brand}
               </Text>
 
               {/* Health Score */}
-              <View className="items-center mb-4">
+              <Animated.View
+                entering={FadeIn.duration(600).delay(400)}
+                className="items-center mb-5"
+              >
                 <View
-                  className="w-20 h-20 rounded-full items-center justify-center"
-                  style={{ backgroundColor: getHealthColor(winner.healthScore) + "20" }}
+                  className="w-24 h-24 rounded-full items-center justify-center"
+                  style={{
+                    backgroundColor:
+                      getHealthColor(winner.healthScore) + "20",
+                  }}
                 >
                   <Text
-                    className="text-3xl font-bold"
+                    className="text-4xl font-bold"
                     style={{ color: getHealthColor(winner.healthScore) }}
                   >
                     {winner.healthScore}
                   </Text>
                 </View>
                 <Text
-                  className="text-sm font-medium mt-1"
+                  className="text-sm font-semibold mt-2"
                   style={{ color: getHealthColor(winner.healthScore) }}
                 >
                   {getHealthLabel(winner.healthScore)}
                 </Text>
-              </View>
+              </Animated.View>
 
               {/* Pros */}
               {winner.pros.length > 0 && (
                 <View className="w-full">
                   {winner.pros.map((pro, i) => (
-                    <View key={i} className="flex-row items-start mb-1">
+                    <Animated.View
+                      key={i}
+                      entering={SlideInRight.duration(300).delay(500 + i * 100)}
+                      className="flex-row items-start mb-2"
+                    >
                       <Ionicons
                         name="checkmark-circle"
                         size={16}
                         color="#22C55E"
                       />
-                      <Text className="text-text-primary text-sm ml-2 flex-1">
+                      <Text
+                        className={`${textPrimary} text-sm ml-2 flex-1`}
+                      >
                         {pro}
                       </Text>
-                    </View>
+                    </Animated.View>
                   ))}
                 </View>
               )}
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* Summary */}
-        <View className="mx-4 mt-4 bg-blue-50 rounded-xl p-4">
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(300)}
+          className={`mx-4 mt-4 ${isDark ? "bg-blue-500/10" : "bg-blue-50"} rounded-2xl p-4`}
+        >
           <View className="flex-row items-start">
-            <Ionicons name="bulb" size={20} color="#3B82F6" />
-            <Text className="text-blue-800 text-sm ml-2 flex-1">
+            <Ionicons
+              name="bulb"
+              size={20}
+              color={isDark ? "#60A5FA" : "#3B82F6"}
+            />
+            <Text
+              className={`${isDark ? "text-blue-300" : "text-blue-800"} text-sm ml-2 flex-1`}
+            >
               {analysisResult.summary}
             </Text>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* All Products Ranking */}
-        <Text className="text-sm font-medium text-text-secondary px-6 mt-6 mb-3">
+        {/* Ranking */}
+        <Text
+          className={`text-xs font-semibold ${textSecondary} px-6 mt-6 mb-3 tracking-wider`}
+        >
           RANKING COMPLETO
         </Text>
 
         {sortedProducts.map((product, index) => (
-          <ProductResultCard
+          <Animated.View
             key={product.productId}
-            product={product}
-            rank={index + 1}
-            imageUri={getProductImage(product.productId)}
-            isWinner={product.productId === analysisResult.winnerId}
-          />
+            entering={FadeInDown.duration(400).delay(400 + index * 150)}
+          >
+            <ProductResultCard
+              product={product}
+              rank={index + 1}
+              imageUri={getProductImage(product.productId)}
+              isWinner={product.productId === analysisResult.winnerId}
+              isDark={isDark}
+              cardBg={cardBg}
+              textPrimary={textPrimary}
+              textSecondary={textSecondary}
+            />
+          </Animated.View>
         ))}
 
-        {/* New Comparison Button */}
-        <View className="px-4 py-6">
+        {/* New Comparison */}
+        <Animated.View
+          entering={FadeInUp.duration(500).delay(800)}
+          className="px-4 py-6"
+        >
           <Pressable
-            className="bg-primary py-4 rounded-xl items-center active:opacity-80"
+            className="bg-primary py-4 rounded-2xl items-center active:opacity-80 shadow-lg"
             onPress={handleNewComparison}
             accessibilityRole="button"
-            accessibilityLabel="Iniciar nueva comparación"
+            accessibilityLabel="Iniciar nueva comparacion"
           >
             <View className="flex-row items-center">
               <Ionicons name="refresh" size={20} color="white" />
-              <Text className="text-white font-semibold ml-2">
-                Nueva Comparación
+              <Text className="text-white font-semibold ml-2 text-base">
+                Nueva Comparacion
               </Text>
             </View>
           </Pressable>
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -187,24 +267,32 @@ function ProductResultCard({
   rank,
   imageUri,
   isWinner,
+  isDark,
+  cardBg,
+  textPrimary,
+  textSecondary,
 }: {
   product: ProductAnalysis;
   rank: number;
   imageUri?: string;
   isWinner: boolean;
+  isDark: boolean;
+  cardBg: string;
+  textPrimary: string;
+  textSecondary: string;
 }) {
   const healthColor = getHealthColor(product.healthScore);
 
   return (
     <View
-      className={`mx-4 mb-3 bg-white rounded-xl p-4 ${
-        isWinner ? "border border-success/30" : "border border-gray-100"
+      className={`mx-4 mb-3 ${cardBg} rounded-2xl p-4 ${
+        isWinner ? "border border-success/30" : `border ${isDark ? "border-slate-700" : "border-gray-100"}`
       }`}
     >
       <View className="flex-row items-center">
         {/* Rank */}
         <View
-          className="w-8 h-8 rounded-full items-center justify-center mr-3"
+          className="w-9 h-9 rounded-full items-center justify-center mr-3"
           style={{ backgroundColor: healthColor + "20" }}
         >
           <Text className="font-bold text-sm" style={{ color: healthColor }}>
@@ -216,17 +304,17 @@ function ProductResultCard({
         {imageUri && (
           <Image
             source={{ uri: imageUri }}
-            className="w-14 h-14 rounded-lg mr-3"
+            className="w-14 h-14 rounded-xl mr-3"
             accessibilityLabel={product.name}
           />
         )}
 
         {/* Info */}
         <View className="flex-1">
-          <Text className="font-semibold text-text-primary">
+          <Text className={`font-semibold ${textPrimary}`}>
             {product.name}
           </Text>
-          <Text className="text-text-secondary text-sm">{product.brand}</Text>
+          <Text className={`${textSecondary} text-sm`}>{product.brand}</Text>
         </View>
 
         {/* Score */}
@@ -234,29 +322,38 @@ function ProductResultCard({
           <Text className="text-2xl font-bold" style={{ color: healthColor }}>
             {product.healthScore}
           </Text>
-          <Text className="text-xs" style={{ color: healthColor }}>
+          <Text className="text-xs font-medium" style={{ color: healthColor }}>
             {getHealthLabel(product.healthScore)}
           </Text>
         </View>
       </View>
 
-      {/* Nutritional highlights */}
+      {/* Nutrient pills */}
       <View className="flex-row flex-wrap mt-3 gap-2">
         <NutrientPill
           label="Cal"
           value={`${product.nutritionalInfo.calories}`}
+          isDark={isDark}
         />
         <NutrientPill
-          label="Azúcar"
+          label="Azucar"
           value={`${product.nutritionalInfo.sugars}g`}
+          isDark={isDark}
         />
         <NutrientPill
           label="Sodio"
           value={`${product.nutritionalInfo.sodium}mg`}
+          isDark={isDark}
         />
         <NutrientPill
-          label="Proteína"
+          label="Proteina"
           value={`${product.nutritionalInfo.protein}g`}
+          isDark={isDark}
+        />
+        <NutrientPill
+          label="Fibra"
+          value={`${product.nutritionalInfo.fiber}g`}
+          isDark={isDark}
         />
       </View>
 
@@ -266,7 +363,7 @@ function ProductResultCard({
           {product.warnings.map((warning, i) => (
             <View key={i} className="flex-row items-start mb-1">
               <Ionicons name="warning" size={14} color="#F59E0B" />
-              <Text className="text-text-secondary text-xs ml-1 flex-1">
+              <Text className={`${textSecondary} text-xs ml-1.5 flex-1`}>
                 {warning}
               </Text>
             </View>
@@ -280,7 +377,7 @@ function ProductResultCard({
           {product.cons.map((con, i) => (
             <View key={i} className="flex-row items-start mb-1">
               <Ionicons name="close-circle" size={14} color="#EF4444" />
-              <Text className="text-text-secondary text-xs ml-1 flex-1">
+              <Text className={`${textSecondary} text-xs ml-1.5 flex-1`}>
                 {con}
               </Text>
             </View>
@@ -291,11 +388,28 @@ function ProductResultCard({
   );
 }
 
-function NutrientPill({ label, value }: { label: string; value: string }) {
+function NutrientPill({
+  label,
+  value,
+  isDark,
+}: {
+  label: string;
+  value: string;
+  isDark: boolean;
+}) {
   return (
-    <View className="bg-gray-100 rounded-full px-3 py-1">
-      <Text className="text-xs text-text-secondary">
-        <Text className="font-medium text-text-primary">{value}</Text> {label}
+    <View
+      className={`${isDark ? "bg-slate-700" : "bg-gray-100"} rounded-full px-3 py-1`}
+    >
+      <Text
+        className={`text-xs ${isDark ? "text-slate-300" : "text-text-secondary"}`}
+      >
+        <Text
+          className={`font-semibold ${isDark ? "text-white" : "text-text-primary"}`}
+        >
+          {value}
+        </Text>{" "}
+        {label}
       </Text>
     </View>
   );

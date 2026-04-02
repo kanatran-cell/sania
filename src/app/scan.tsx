@@ -1,15 +1,36 @@
-import { View, Text, Pressable, FlatList, Image, Alert } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  FlatList,
+  Image,
+  Alert,
+  useColorScheme,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+  LinearTransition,
+} from "react-native-reanimated";
 import { useCamera } from "../hooks/useCamera";
 import { useProductAnalysis } from "../hooks/useProductAnalysis";
 import { useProductStore } from "../stores/useProductStore";
 import type { ScannedProduct } from "../types/product";
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export default function ScanScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
   const { captureProduct } = useCamera();
   const analysis = useProductAnalysis();
 
@@ -19,6 +40,12 @@ export default function ScanScreen() {
   const isAnalyzing = useProductStore((s) => s.isAnalyzing);
 
   const canCompare = scannedProducts.length >= 2;
+
+  const bg = isDark ? "bg-slate-900" : "bg-white";
+  const textPrimary = isDark ? "text-white" : "text-text-primary";
+  const textSecondary = isDark ? "text-slate-400" : "text-text-secondary";
+  const borderColor = isDark ? "border-slate-700" : "border-gray-100";
+  const iconColor = isDark ? "#E2E8F0" : "#0F172A";
 
   async function handleCapture() {
     try {
@@ -39,10 +66,10 @@ export default function ScanScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.push("/results");
       },
-      onError: (error) => {
+      onError: () => {
         Alert.alert(
           "Error",
-          "No se pudieron analizar los productos. Verifica tu conexión e intenta de nuevo."
+          "No se pudieron analizar los productos. Verifica tu conexion e intenta de nuevo."
         );
       },
     });
@@ -55,15 +82,20 @@ export default function ScanScreen() {
 
   function renderProduct({ item }: { item: ScannedProduct }) {
     return (
-      <View className="mr-3 items-center">
+      <Animated.View
+        entering={ZoomIn.duration(300).springify()}
+        exiting={ZoomOut.duration(200)}
+        layout={LinearTransition.springify()}
+        className="mr-3 items-center"
+      >
         <View className="relative">
           <Image
             source={{ uri: item.imageUri }}
             className="w-24 h-24 rounded-xl"
-            accessibilityLabel={`Producto escaneado`}
+            accessibilityLabel="Producto escaneado"
           />
           <Pressable
-            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full items-center justify-center"
+            className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 rounded-full items-center justify-center shadow-sm"
             onPress={() => handleRemove(item.id)}
             accessibilityRole="button"
             accessibilityLabel="Eliminar producto"
@@ -71,84 +103,109 @@ export default function ScanScreen() {
             <Ionicons name="close" size={14} color="white" />
           </Pressable>
         </View>
-        <Text className="text-xs text-text-secondary mt-1">
+        <Text className={`text-xs ${textSecondary} mt-1`}>
           #{scannedProducts.indexOf(item) + 1}
         </Text>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className={`flex-1 ${bg}`}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
+      <View
+        className={`flex-row items-center justify-between px-4 py-3 border-b ${borderColor}`}
+      >
         <Pressable
           onPress={() => router.back()}
           className="p-2"
           accessibilityRole="button"
           accessibilityLabel="Volver al inicio"
         >
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={iconColor} />
         </Pressable>
-        <Text className="text-lg font-semibold text-text-primary">
+        <Text className={`text-lg font-semibold ${textPrimary}`}>
           Escanear Productos
         </Text>
         <View className="w-10" />
       </View>
 
       <View className="flex-1">
-        {/* Área principal */}
+        {/* Main area */}
         <View className="flex-1 justify-center items-center px-8">
           {scannedProducts.length === 0 ? (
-            <View className="items-center">
-              <View className="w-32 h-32 bg-primary/5 rounded-full items-center justify-center mb-6">
-                <Ionicons name="camera" size={56} color="#6366F1" />
+            <Animated.View
+              entering={FadeIn.duration(400)}
+              className="items-center"
+            >
+              <View
+                className={`w-32 h-32 ${isDark ? "bg-indigo-500/10" : "bg-primary/5"} rounded-full items-center justify-center mb-6`}
+              >
+                <Ionicons
+                  name="camera"
+                  size={56}
+                  color={isDark ? "#818CF8" : "#6366F1"}
+                />
               </View>
-              <Text className="text-xl font-semibold text-text-primary mb-2 text-center">
+              <Text
+                className={`text-xl font-semibold ${textPrimary} mb-2 text-center`}
+              >
                 Escanea tu primer producto
               </Text>
-              <Text className="text-text-secondary text-center mb-8">
+              <Text className={`${textSecondary} text-center mb-8`}>
                 Toma una foto de la etiqueta nutricional{"\n"}o del frente del
                 producto
               </Text>
-            </View>
+            </Animated.View>
           ) : (
-            <View className="items-center">
+            <Animated.View
+              entering={FadeIn.duration(300)}
+              className="items-center"
+            >
               <Text className="text-6xl font-bold text-primary mb-2">
                 {scannedProducts.length}
               </Text>
-              <Text className="text-text-secondary text-lg mb-2">
+              <Text className={`${textSecondary} text-lg mb-2`}>
                 {scannedProducts.length === 1
                   ? "producto escaneado"
                   : "productos escaneados"}
               </Text>
               {!canCompare && (
-                <Text className="text-warning text-sm">
-                  Necesitas al menos 2 productos para comparar
-                </Text>
+                <Animated.Text
+                  entering={FadeInDown.duration(300)}
+                  className="text-warning text-sm"
+                >
+                  Necesitas al menos 2 para comparar
+                </Animated.Text>
               )}
-            </View>
+            </Animated.View>
           )}
 
-          {/* Botón de captura */}
-          <Pressable
-            className="w-20 h-20 bg-primary rounded-full items-center justify-center mt-8 active:opacity-80 shadow-lg"
+          {/* Capture button */}
+          <AnimatedPressable
+            entering={FadeInDown.duration(500).delay(200).springify()}
+            className="w-20 h-20 bg-primary rounded-full items-center justify-center mt-8 active:opacity-80 shadow-xl"
             onPress={handleCapture}
             disabled={isAnalyzing}
             accessibilityRole="button"
             accessibilityLabel="Tomar foto del producto"
           >
             <Ionicons name="camera" size={32} color="white" />
-          </Pressable>
-          <Text className="text-text-secondary text-sm mt-3">
+          </AnimatedPressable>
+          <Text className={`${textSecondary} text-sm mt-3`}>
             Toca para escanear
           </Text>
         </View>
 
-        {/* Lista de productos escaneados */}
+        {/* Scanned products list */}
         {scannedProducts.length > 0 && (
-          <View className="border-t border-gray-100 pt-4 pb-2">
-            <Text className="text-sm font-medium text-text-secondary px-6 mb-3">
+          <Animated.View
+            entering={FadeInDown.duration(400)}
+            className={`border-t ${borderColor} pt-4 pb-2`}
+          >
+            <Text
+              className={`text-xs font-semibold ${textSecondary} px-6 mb-3 tracking-wider`}
+            >
               PRODUCTOS ESCANEADOS
             </Text>
             <FlatList
@@ -159,16 +216,18 @@ export default function ScanScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 24 }}
             />
-          </View>
+          </Animated.View>
         )}
 
-        {/* Botón comparar */}
-        <View className="px-6 pb-4">
+        {/* Compare button */}
+        <View className="px-6 pb-4 pt-2">
           <Pressable
-            className={`py-4 rounded-xl items-center ${
+            className={`py-4 rounded-2xl items-center ${
               canCompare && !isAnalyzing
-                ? "bg-success active:opacity-80"
-                : "bg-gray-200"
+                ? "bg-success active:opacity-80 shadow-lg"
+                : isDark
+                  ? "bg-slate-800"
+                  : "bg-gray-200"
             }`}
             onPress={handleCompare}
             disabled={!canCompare || isAnalyzing}
@@ -178,8 +237,8 @@ export default function ScanScreen() {
           >
             {isAnalyzing ? (
               <View className="flex-row items-center">
-                <Ionicons name="hourglass" size={20} color="#64748B" />
-                <Text className="text-text-secondary font-semibold ml-2">
+                <ActivityIndicator size="small" color="#64748B" />
+                <Text className={`${textSecondary} font-semibold ml-2`}>
                   Analizando...
                 </Text>
               </View>
@@ -191,7 +250,7 @@ export default function ScanScreen() {
                   color={canCompare ? "white" : "#94A3B8"}
                 />
                 <Text
-                  className={`font-semibold ml-2 ${
+                  className={`font-semibold ml-2 text-base ${
                     canCompare ? "text-white" : "text-gray-400"
                   }`}
                 >

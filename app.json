@@ -26,14 +26,22 @@
         "backgroundColor": "#6366F1"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
-      ["expo-router", { "root": "./src/app" }],
+      [
+        "expo-router",
+        {
+          "root": "./src/app"
+        }
+      ],
       "expo-secure-store",
       [
         "expo-camera",
@@ -47,6 +55,15 @@
           "cameraPermission": "SanIA necesita acceso a tu cámara para escanear productos alimenticios."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "root": "./src/app"
+      },
+      "eas": {
+        "projectId": "d86f3fe7-fd65-4fa7-b510-d3540a82d8ec"
+      }
+    },
+    "owner": "kanatran"
   }
 }

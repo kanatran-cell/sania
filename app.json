@@ -25,7 +25,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#6366F1"
       },
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -49,7 +51,8 @@
         {
           "cameraPermission": "SanIA necesita acceso a tu cámara para escanear productos alimenticios."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {

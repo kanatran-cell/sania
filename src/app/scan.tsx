@@ -59,11 +59,13 @@ export default function ScanScreen() {
   const removeProduct = useProductStore((s) => s.removeProduct);
   const isAnalyzing = useProductStore((s) => s.isAnalyzing);
 
+  const MAX_PRODUCTS = 6;
   const canCompare = scannedProducts.length >= 2;
+  const isFull = scannedProducts.length >= MAX_PRODUCTS;
 
   async function handleBarcodeScan(result: BarcodeScanningResult) {
     const barcode = result.data;
-    if (scannedBarcodesRef.current.has(barcode) || isLooking) return;
+    if (scannedBarcodesRef.current.has(barcode) || isLooking || isFull) return;
 
     scanCountRef.current[barcode] = (scanCountRef.current[barcode] || 0) + 1;
     if (scanCountRef.current[barcode] < REQUIRED_READS) return;
@@ -111,6 +113,10 @@ export default function ScanScreen() {
   }
 
   function addProductFromLookup(barcode: string, lookupResult: { name: string; brand: string; imageUrl?: string; nutritionalInfo: ScannedProduct["nutritionalInfo"] }, photoUri?: string) {
+    if (useProductStore.getState().scannedProducts.length >= MAX_PRODUCTS) {
+      Alert.alert("Limite alcanzado", `Puedes comparar hasta ${MAX_PRODUCTS} productos.`);
+      return;
+    }
     const product: ScannedProduct = {
       id: generateId(),
       barcode,
@@ -397,7 +403,7 @@ export default function ScanScreen() {
           <View style={s.overlay}>
             <View style={s.scanFrame} />
             <Text style={s.scanHint}>
-              {isLooking ? "Buscando producto..." : "Apunta al codigo de barras"}
+              {isLooking ? "Buscando producto..." : isFull ? `Maximo ${MAX_PRODUCTS} productos alcanzado` : "Apunta al codigo de barras"}
             </Text>
             {isLooking && <ActivityIndicator size="large" color="#fff" style={{ marginTop: 12 }} />}
 

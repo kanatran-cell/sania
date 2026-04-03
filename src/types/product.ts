@@ -31,20 +31,6 @@ export interface NutritionalInfo extends NutrientValues {
   additives: string[];
 }
 
-export interface IngredientAnalysis {
-  totalCount: number;
-  artificialSweeteners: string[];
-  artificialColorants: string[];
-  preservatives: string[];
-  ultraProcessedMarkers: string[];
-  flavorEnhancers: string[];
-  hasAddedSugar: boolean;
-  hasAddedWater: boolean;
-  firstIngredient: string;
-  classification: "natural" | "minimal" | "processed" | "ultra_processed";
-  verdict: string;
-}
-
 export interface ProductAnalysis {
   productId: string;
   name: string;
@@ -54,7 +40,8 @@ export interface ProductAnalysis {
   pros: string[];
   cons: string[];
   warnings: string[];
-  ingredientAnalysis?: IngredientAnalysis;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ingredientAnalysis?: any;
 }
 
 export interface AnalysisResult {

@@ -111,7 +111,7 @@ export async function searchProducts(query: string): Promise<SearchResult[]> {
   try {
     data = JSON.parse(text);
   } catch {
-    console.error("[SanIA] Failed to parse search response:", text.substring(0, 200));
+    console.warn("[SanIA] Failed to parse search response:", text.substring(0, 200));
     throw new Error("Invalid response from server");
   }
 

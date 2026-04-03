@@ -4,13 +4,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useProductStore } from "../stores/useProductStore";
 import { getHealthColor, getHealthLabel } from "../constants/theme";
-import type { ProductAnalysis, IngredientAnalysis } from "../types/product";
+import type { ProductAnalysis } from "../types/product";
+import type { IngredientAnalysis } from "../services/analyzer";
+import type { HarmfulMatch } from "../constants/harmfulIngredients";
 
-const CLASSIFICATION_LABELS: Record<string, { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
+const CLASSIFICATION_CONFIG: Record<string, { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
   natural: { label: "Natural", color: "#15803D", bg: "#F0FDF4", icon: "leaf" },
   minimal: { label: "Minimamente procesado", color: "#CA8A04", bg: "#FEFCE8", icon: "checkmark-circle" },
   processed: { label: "Procesado", color: "#EA580C", bg: "#FFF7ED", icon: "alert-circle" },
   ultra_processed: { label: "Ultra-procesado", color: "#DC2626", bg: "#FEF2F2", icon: "skull" },
+};
+
+const LEVEL_CONFIG = {
+  1: { label: "PELIGROSO", color: "#DC2626", bg: "#FEF2F2", icon: "skull" as keyof typeof Ionicons.glyphMap },
+  2: { label: "PREOCUPANTE", color: "#EA580C", bg: "#FFF7ED", icon: "warning" as keyof typeof Ionicons.glyphMap },
+  3: { label: "LEVE", color: "#CA8A04", bg: "#FEFCE8", icon: "information-circle" as keyof typeof Ionicons.glyphMap },
 };
 
 export default function ResultsScreen() {
@@ -32,7 +40,7 @@ export default function ResultsScreen() {
 
   const sorted = [...analysisResult.products].sort((a, b) => b.healthScore - a.healthScore);
   const winner = sorted[0];
-  const winnerImage = scannedProducts.find((p) => p.id === winner.productId);
+  const winnerScanned = scannedProducts.find((p) => p.id === winner.productId);
 
   function getProductImage(id: string) {
     const p = scannedProducts.find((sp) => sp.id === id);
@@ -41,7 +49,6 @@ export default function ResultsScreen() {
 
   return (
     <SafeAreaView style={s.container}>
-      {/* Header */}
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={{ padding: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#0F172A" />
@@ -51,31 +58,28 @@ export default function ResultsScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {/* Winner Card */}
+        {/* Winner */}
         <View style={s.winnerCard}>
           <View style={s.winnerBadge}>
             <Ionicons name="trophy" size={16} color="#15803D" />
             <Text style={s.winnerBadgeText}>MEJOR OPCION</Text>
           </View>
 
-          {winnerImage && (winnerImage.imageUrl || winnerImage.imageUri) && (
-            <Image source={{ uri: winnerImage.imageUrl || winnerImage.imageUri }} style={s.winnerImage} />
+          {winnerScanned && (winnerScanned.imageUrl || winnerScanned.imageUri) && (
+            <Image source={{ uri: winnerScanned.imageUrl || winnerScanned.imageUri }} style={s.winnerImage} />
           )}
 
           <Text style={s.winnerName}>{winner.name}</Text>
           <Text style={s.winnerBrand}>{winner.brand}</Text>
 
-          {/* Classification badge */}
           {winner.ingredientAnalysis && (
-            <ClassificationBadge ia={winner.ingredientAnalysis} large />
+            <ClassBadge ia={winner.ingredientAnalysis as IngredientAnalysis} />
           )}
 
-          {/* Verdict */}
           {winner.ingredientAnalysis && (
-            <Text style={s.verdictText}>{winner.ingredientAnalysis.verdict}</Text>
+            <Text style={s.verdictText}>{(winner.ingredientAnalysis as IngredientAnalysis).verdict}</Text>
           )}
 
-          {/* Score */}
           <View style={[s.scoreCircle, { backgroundColor: getHealthColor(winner.healthScore) + "20" }]}>
             <Text style={[s.scoreText, { color: getHealthColor(winner.healthScore) }]}>{winner.healthScore}</Text>
           </View>
@@ -84,8 +88,8 @@ export default function ResultsScreen() {
           </Text>
         </View>
 
-        {/* All Products Comparison */}
-        <Text style={s.sectionLabel}>COMPARACION DE INGREDIENTES</Text>
+        {/* Comparison */}
+        <Text style={s.sectionLabel}>COMPARACION DETALLADA</Text>
 
         {sorted.map((product, index) => (
           <ProductCard
@@ -113,12 +117,12 @@ export default function ResultsScreen() {
   );
 }
 
-function ClassificationBadge({ ia, large }: { ia: IngredientAnalysis; large?: boolean }) {
-  const cls = CLASSIFICATION_LABELS[ia.classification] || CLASSIFICATION_LABELS.processed;
+function ClassBadge({ ia }: { ia: IngredientAnalysis }) {
+  const cls = CLASSIFICATION_CONFIG[ia.classification] || CLASSIFICATION_CONFIG.processed;
   return (
-    <View style={[s.classBadge, { backgroundColor: cls.bg }, large && { paddingHorizontal: 20, paddingVertical: 8 }]}>
-      <Ionicons name={cls.icon} size={large ? 18 : 14} color={cls.color} />
-      <Text style={[s.classBadgeText, { color: cls.color }, large && { fontSize: 15 }]}>{cls.label}</Text>
+    <View style={[s.classBadge, { backgroundColor: cls.bg }]}>
+      <Ionicons name={cls.icon} size={16} color={cls.color} />
+      <Text style={[s.classBadgeText, { color: cls.color }]}>{cls.label}</Text>
     </View>
   );
 }
@@ -127,12 +131,11 @@ function ProductCard({ product, rank, imageUri, isWinner }: {
   product: ProductAnalysis; rank: number; imageUri?: string; isWinner: boolean;
 }) {
   const color = getHealthColor(product.healthScore);
-  const ia = product.ingredientAnalysis;
-  const cls = ia ? CLASSIFICATION_LABELS[ia.classification] : null;
+  const ia = product.ingredientAnalysis as IngredientAnalysis | undefined;
 
   return (
     <View style={[s.card, isWinner && { borderColor: "#22C55E60", borderWidth: 2 }]}>
-      {/* Header row */}
+      {/* Header */}
       <View style={s.cardRow}>
         <View style={[s.rankCircle, { backgroundColor: color + "20" }]}>
           <Text style={[s.rankText, { color }]}>#{rank}</Text>
@@ -147,42 +150,36 @@ function ProductCard({ product, rank, imageUri, isWinner }: {
         </View>
       </View>
 
-      {/* Classification */}
-      {ia && <ClassificationBadge ia={ia} />}
+      {/* Classification + Verdict */}
+      {ia && <ClassBadge ia={ia} />}
+      {ia && <Text style={s.cardVerdict}>{ia.verdict}</Text>}
 
-      {/* Verdict */}
-      {ia && (
-        <Text style={[s.cardVerdict, { color: cls?.color || "#64748B" }]}>
-          {ia.verdict}
-        </Text>
-      )}
-
-      {/* Ingredient issues */}
-      {ia && ia.artificialSweeteners.length > 0 && (
-        <BadgeRow icon="flask" color="#DC2626" text={`Edulcorantes: ${ia.artificialSweeteners.join(", ")}`} />
-      )}
-      {ia && ia.artificialColorants.length > 0 && (
-        <BadgeRow icon="color-palette" color="#DC2626" text={`Colorantes: ${ia.artificialColorants.join(", ")}`} />
-      )}
-      {ia && ia.preservatives.length > 0 && (
-        <BadgeRow icon="shield" color="#EA580C" text={`Conservantes: ${ia.preservatives.join(", ")}`} />
-      )}
-      {ia && ia.ultraProcessedMarkers.length > 0 && (
-        <BadgeRow icon="beaker" color="#DC2626" text={`Ultra-procesados: ${ia.ultraProcessedMarkers.join(", ")}`} />
-      )}
-      {ia && ia.flavorEnhancers.length > 0 && (
-        <BadgeRow icon="restaurant" color="#EA580C" text={`Saborizantes: ${ia.flavorEnhancers.join(", ")}`} />
-      )}
-      {ia && ia.hasAddedSugar && (
-        <BadgeRow icon="cube" color="#EA580C" text="Contiene azucar añadida" />
-      )}
-      {ia && ia.hasAddedWater && ia.hasAddedSugar && (
-        <BadgeRow icon="water" color="#EA580C" text="Primer ingrediente es agua — producto diluido" />
+      {/* Harmful ingredients by level */}
+      {ia && ia.harmfulMatches.length > 0 && (
+        <View style={s.harmfulSection}>
+          <Text style={s.harmfulTitle}>Ingredientes detectados:</Text>
+          {ia.harmfulMatches.map((match: HarmfulMatch, i: number) => {
+            const lvl = LEVEL_CONFIG[match.ingredient.level];
+            return (
+              <View key={i} style={[s.harmfulItem, { backgroundColor: lvl.bg }]}>
+                <View style={s.harmfulHeader}>
+                  <Ionicons name={lvl.icon} size={16} color={lvl.color} />
+                  <Text style={[s.harmfulLevel, { color: lvl.color }]}>{lvl.label}</Text>
+                  <Text style={s.harmfulCategory}>{match.ingredient.category}</Text>
+                </View>
+                <Text style={s.harmfulReason}>{match.ingredient.reason}</Text>
+              </View>
+            );
+          })}
+        </View>
       )}
 
       {/* Pros */}
       {product.pros.map((pro, i) => (
-        <BadgeRow key={`pro-${i}`} icon="checkmark-circle" color="#15803D" text={pro} />
+        <View key={`pro-${i}`} style={s.badgeRow}>
+          <Ionicons name="checkmark-circle" size={14} color="#15803D" />
+          <Text style={[s.badgeText, { color: "#15803D" }]}>{pro}</Text>
+        </View>
       ))}
 
       {/* Ingredients list */}
@@ -198,15 +195,6 @@ function ProductCard({ product, rank, imageUri, isWinner }: {
   );
 }
 
-function BadgeRow({ icon, color, text }: { icon: keyof typeof Ionicons.glyphMap; color: string; text: string }) {
-  return (
-    <View style={s.badgeRow}>
-      <Ionicons name={icon} size={14} color={color} />
-      <Text style={[s.badgeText, { color }]}>{text}</Text>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
@@ -216,8 +204,8 @@ const s = StyleSheet.create({
   winnerBadgeText: { color: "#15803D", fontWeight: "bold", marginLeft: 6, fontSize: 13 },
   winnerImage: { width: 120, height: 120, borderRadius: 16, marginBottom: 12 },
   winnerName: { fontSize: 22, fontWeight: "bold", color: "#0F172A", textAlign: "center" },
-  winnerBrand: { color: "#64748B", fontSize: 15, marginBottom: 12 },
-  verdictText: { color: "#374151", fontSize: 14, textAlign: "center", marginVertical: 12, paddingHorizontal: 8, lineHeight: 20 },
+  winnerBrand: { color: "#64748B", fontSize: 15, marginBottom: 8 },
+  verdictText: { color: "#374151", fontSize: 14, textAlign: "center", marginVertical: 12, lineHeight: 20 },
   scoreCircle: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginTop: 4 },
   scoreText: { fontSize: 32, fontWeight: "bold" },
   scoreLabel: { fontSize: 13, fontWeight: "600", marginTop: 4 },
@@ -230,15 +218,25 @@ const s = StyleSheet.create({
   cardName: { fontWeight: "600", color: "#0F172A", fontSize: 15 },
   cardBrand: { color: "#64748B", fontSize: 13 },
   cardScore: { fontSize: 24, fontWeight: "bold" },
-  cardVerdict: { fontSize: 13, marginTop: 8, lineHeight: 18 },
+  cardVerdict: { fontSize: 13, color: "#374151", marginTop: 8, lineHeight: 18 },
   classBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, marginTop: 10, gap: 5 },
   classBadgeText: { fontWeight: "600", fontSize: 12 },
-  classBadgeCount: { fontSize: 11, opacity: 0.7 },
+  // Harmful ingredients
+  harmfulSection: { marginTop: 12 },
+  harmfulTitle: { fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 8 },
+  harmfulItem: { borderRadius: 10, padding: 10, marginBottom: 6 },
+  harmfulHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  harmfulLevel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  harmfulCategory: { fontSize: 12, fontWeight: "600", color: "#374151" },
+  harmfulReason: { fontSize: 12, color: "#4B5563", lineHeight: 17 },
+  // Pros
   badgeRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 6, gap: 6 },
   badgeText: { fontSize: 13, flex: 1, lineHeight: 18 },
+  // Ingredients
   ingredientsList: { marginTop: 12, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12 },
   ingredientsTitle: { fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 4 },
   ingredientsText: { fontSize: 12, color: "#374151", lineHeight: 18 },
+  // Buttons
   actionBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center" },
   actionBtnText: { color: "#fff", fontWeight: "600", fontSize: 16, marginLeft: 8 },
   homeBtn: { paddingVertical: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#6366F1" },

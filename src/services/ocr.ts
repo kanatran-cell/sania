@@ -46,7 +46,7 @@ export async function extractProductName(imageUri: string): Promise<string> {
 
     return result.text.split("\n")[0]?.trim().substring(0, 60) || "";
   } catch (error) {
-    console.error("[SanIA OCR] Error:", error);
+    console.warn("[SanIA OCR] Error:", error);
     return "";
   }
 }

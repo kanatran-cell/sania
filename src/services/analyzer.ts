@@ -4,166 +4,107 @@ import type {
   ScannedProduct,
   NutritionalInfo,
 } from "../types/product";
+import {
+  findHarmfulIngredients,
+  HarmfulMatch,
+} from "../constants/harmfulIngredients";
 
-// === INGREDIENT CLASSIFICATION ===
+// === INGREDIENT ANALYSIS ===
 
-const ARTIFICIAL_SWEETENERS = [
-  "aspartame", "aspartamo", "acesulfame", "acesulfamo", "acesulfame k",
-  "sucralosa", "sucralose", "sacarina", "saccharin", "ciclamato",
-  "neotame", "neotamo", "advantame",
-];
-
-const ARTIFICIAL_COLORANTS = [
-  "colorante", "color artificial", "colour",
-  "tartrazina", "tartrazine", "amarillo 5", "yellow 5",
-  "amarillo 6", "yellow 6", "amarillo ocaso", "sunset yellow",
-  "rojo 40", "red 40", "rojo allura", "allura red",
-  "azul 1", "blue 1", "azul 2", "blue 2", "azul brillante",
-  "caramelo", "dioxido de titanio", "titanium dioxide",
-  "e102", "e104", "e110", "e120", "e122", "e124", "e127", "e129",
-  "e131", "e132", "e133", "e142", "e150", "e151", "e155", "e171",
-];
-
-const PRESERVATIVES = [
-  "benzoato", "benzoate", "sorbato", "sorbate",
-  "nitrito", "nitrite", "nitrato", "nitrate",
-  "sulfito", "sulfite", "bisulfito",
-  "propionato", "propionate",
-  "e200", "e202", "e210", "e211", "e212", "e213",
-  "e220", "e221", "e222", "e223", "e224",
-  "e249", "e250", "e251", "e252",
-  "e280", "e281", "e282", "e283",
-];
-
-const ULTRA_PROCESSED_MARKERS = [
-  "maltodextrina", "maltodextrin",
-  "jarabe de maiz", "jarabe de maíz", "high fructose corn syrup", "hfcs",
-  "jarabe de glucosa", "glucose syrup",
-  "aceite vegetal hidrogenado", "hydrogenated", "parcialmente hidrogenado",
-  "proteina hidrolizada", "hydrolyzed protein",
-  "almidón modificado", "modified starch",
-  "isolate", "aislado",
-  "dextrosa", "dextrose",
-  "polidextrosa", "polydextrose",
-  "carboximetilcelulosa", "goma xantana", "xanthan",
-  "polisorbato", "polysorbate",
-  "mono y digliceridos", "monoglyceride", "diglyceride",
-  "lecitina de soya", "soy lecithin",
-];
-
-const FLAVOR_ENHANCERS = [
-  "glutamato", "glutamate", "msg", "glutamato monosodico",
-  "inosinato", "inosinate", "guanilato", "guanylate",
-  "e621", "e627", "e631", "e635",
-  "saborizante", "saborizante artificial", "flavoring", "artificial flavor",
-  "extracto de levadura", "yeast extract",
-  "aroma", "aroma artificial", "aroma idéntico al natural",
-];
-
-interface IngredientAnalysis {
+export interface IngredientAnalysis {
   totalCount: number;
-  artificialSweeteners: string[];
-  artificialColorants: string[];
-  preservatives: string[];
-  ultraProcessedMarkers: string[];
-  flavorEnhancers: string[];
+  harmfulMatches: HarmfulMatch[];
+  level1Count: number;
+  level2Count: number;
+  level3Count: number;
   hasAddedSugar: boolean;
   hasAddedWater: boolean;
-  firstIngredient: string;
   classification: "natural" | "minimal" | "processed" | "ultra_processed";
   verdict: string;
 }
 
 function analyzeIngredients(info: NutritionalInfo): IngredientAnalysis {
   const ingredients = info.ingredients;
-  const allText = ingredients.join(" ").toLowerCase();
-  const additives = info.additives.map((a) => a.toLowerCase());
-  const combined = allText + " " + additives.join(" ");
+  const combined = ingredients.join(" ").toLowerCase();
 
-  const findMatches = (list: string[]): string[] => {
-    const found: string[] = [];
-    for (const item of list) {
-      if (combined.includes(item.toLowerCase())) {
-        found.push(item);
-      }
-    }
-    return [...new Set(found)];
-  };
+  // Find harmful ingredients using the database
+  const harmfulMatches = findHarmfulIngredients(ingredients, info.additives);
+  const level1Count = harmfulMatches.filter((m) => m.ingredient.level === 1).length;
+  const level2Count = harmfulMatches.filter((m) => m.ingredient.level === 2).length;
+  const level3Count = harmfulMatches.filter((m) => m.ingredient.level === 3).length;
 
-  const artificialSweeteners = findMatches(ARTIFICIAL_SWEETENERS);
-  const artificialColorants = findMatches(ARTIFICIAL_COLORANTS);
-  const preservatives = findMatches(PRESERVATIVES);
-  const ultraProcessedMarkers = findMatches(ULTRA_PROCESSED_MARKERS);
-  const flavorEnhancers = findMatches(FLAVOR_ENHANCERS);
-
-  const sugarWords = ["azucar", "azúcar", "sugar", "sacarosa", "fructosa", "jarabe", "syrup", "miel", "honey"];
+  const sugarWords = ["azucar", "azúcar", "sugar", "sacarosa", "fructosa", "jarabe", "syrup", "miel"];
   const hasAddedSugar = sugarWords.some((w) => combined.includes(w));
 
-  const waterWords = ["agua", "water"];
   const hasAddedWater = ingredients.length > 0 &&
-    waterWords.some((w) => ingredients[0].toLowerCase().includes(w));
+    ["agua", "water"].some((w) => ingredients[0].toLowerCase().includes(w));
 
-  const firstIngredient = ingredients[0] || "No disponible";
-
-  // Classification based on NOVA system
-  const badCount = artificialSweeteners.length + artificialColorants.length +
-    preservatives.length + ultraProcessedMarkers.length + flavorEnhancers.length;
-
+  // Classification
+  const additivesCount = info.additives.length;
+  const totalBad = level1Count + level2Count + additivesCount;
   let classification: IngredientAnalysis["classification"];
   let verdict: string;
 
-  if (ingredients.length === 0) {
+  if (ingredients.length === 0 && additivesCount > 3) {
+    classification = "ultra_processed";
+    verdict = "Ultra-procesado.";
+  } else if (ingredients.length === 0 && additivesCount > 0) {
+    classification = "processed";
+    verdict = "Procesado.";
+  } else if (ingredients.length === 0) {
     classification = "processed";
     verdict = "Sin informacion de ingredientes disponible.";
-  } else if (badCount === 0 && !hasAddedSugar && !hasAddedWater && ingredients.length <= 3) {
-    classification = "natural";
-    verdict = `100% natural. Solo contiene: ${ingredients.slice(0, 3).join(", ")}. Sin aditivos, sin azucar añadida.`;
-  } else if (badCount === 0 && ingredients.length <= 6) {
-    classification = "minimal";
-    const issues: string[] = [];
-    if (hasAddedSugar) issues.push("azucar añadida");
-    if (hasAddedWater) issues.push("agua añadida");
-    verdict = issues.length > 0
-      ? `Minimamente procesado, pero contiene ${issues.join(" y ")}.`
-      : `Minimamente procesado .`;
-  } else if (badCount <= 2 && ingredients.length <= 10) {
-    classification = "processed";
-    const issues: string[] = [];
-    if (artificialColorants.length > 0) issues.push("colorantes");
-    if (preservatives.length > 0) issues.push("conservantes");
-    if (hasAddedSugar) issues.push("azucar añadida");
-    verdict = `Procesado. Contiene ${issues.join(", ")}. `;
-  } else {
+  } else if (level1Count > 0) {
+    // Any level 1 ingredient = ultra processed
     classification = "ultra_processed";
-    const issues: string[] = [];
-    if (artificialSweeteners.length > 0) issues.push("edulcorantes artificiales");
-    if (artificialColorants.length > 0) issues.push("colorantes");
-    if (preservatives.length > 0) issues.push("conservantes");
-    if (ultraProcessedMarkers.length > 0) issues.push("quimicos ultra-procesados");
-    if (flavorEnhancers.length > 0) issues.push("saborizantes artificiales");
-    if (hasAddedSugar && hasAddedWater) {
-      verdict = `Ultra-procesado. Basicamente es agua con azucar y quimicos. Contiene: ${issues.join(", ")}.`;
+    const dangers = harmfulMatches
+      .filter((m) => m.ingredient.level === 1)
+      .map((m) => m.ingredient.category.toLowerCase());
+    if (hasAddedWater && hasAddedSugar) {
+      verdict = `Ultra-procesado. Basicamente agua con azucar y quimicos. Contiene ${[...new Set(dangers)].join(", ")}.`;
     } else {
-      verdict = `Ultra-procesado. Mezcla de quimicos: ${issues.join(", ")}.`;
+      verdict = `Ultra-procesado. Contiene ingredientes peligrosos: ${[...new Set(dangers)].join(", ")}.`;
     }
+  } else if (level2Count >= 2 || totalBad > 4) {
+    classification = "ultra_processed";
+    const concerns = harmfulMatches
+      .filter((m) => m.ingredient.level <= 2)
+      .map((m) => m.ingredient.category.toLowerCase());
+    verdict = `Ultra-procesado. Contiene: ${[...new Set(concerns)].join(", ")}.`;
+  } else if (level2Count > 0 || level3Count > 2) {
+    classification = "processed";
+    const issues = harmfulMatches
+      .map((m) => m.ingredient.category.toLowerCase());
+    if (hasAddedSugar) issues.push("azucar añadida");
+    verdict = `Procesado. Contiene ${[...new Set(issues)].join(", ")}.`;
+  } else if (hasAddedSugar || level3Count > 0) {
+    classification = "minimal";
+    const notes: string[] = [];
+    if (hasAddedSugar) notes.push("azucar añadida");
+    if (hasAddedWater) notes.push("agua añadida");
+    if (level3Count > 0) notes.push("algunos aditivos");
+    verdict = notes.length > 0
+      ? `Minimamente procesado, pero contiene ${notes.join(" y ")}.`
+      : "Minimamente procesado.";
+  } else {
+    classification = "natural";
+    verdict = `100% natural. Solo contiene: ${ingredients.slice(0, 4).join(", ")}. Sin aditivos ni quimicos.`;
   }
 
   return {
     totalCount: ingredients.length,
-    artificialSweeteners,
-    artificialColorants,
-    preservatives,
-    ultraProcessedMarkers,
-    flavorEnhancers,
+    harmfulMatches,
+    level1Count,
+    level2Count,
+    level3Count,
     hasAddedSugar,
     hasAddedWater,
-    firstIngredient,
     classification,
     verdict,
   };
 }
 
-// === HEALTH SCORING (ingredient-first approach) ===
+// === HEALTH SCORING ===
 
 function calculateHealthScore(info: NutritionalInfo): {
   score: number;
@@ -177,7 +118,7 @@ function calculateHealthScore(info: NutritionalInfo): {
   const cons: string[] = [];
   const warnings: string[] = [];
 
-  // Start score based on classification (this is the PRIMARY factor)
+  // Base score by classification
   let score: number;
   switch (ia.classification) {
     case "natural":
@@ -198,75 +139,60 @@ function calculateHealthScore(info: NutritionalInfo): {
       break;
   }
 
-  // === INGREDIENT PENALTIES ===
+  // === PENALTIES BY TOXICITY LEVEL ===
 
-  if (ia.artificialSweeteners.length > 0) {
-    score -= 15;
-    warnings.push(`Edulcorantes artificiales: ${ia.artificialSweeteners.join(", ")}`);
+  // Level 1: -20 per ingredient (dangerous)
+  for (const match of ia.harmfulMatches.filter((m) => m.ingredient.level === 1)) {
+    score -= 20;
+    warnings.push(`${match.ingredient.category}: ${match.ingredient.reason}`);
   }
 
-  if (ia.artificialColorants.length > 0) {
+  // Level 2: -10 per ingredient (concerning)
+  for (const match of ia.harmfulMatches.filter((m) => m.ingredient.level === 2)) {
     score -= 10;
-    warnings.push(`Colorantes artificiales: ${ia.artificialColorants.join(", ")}`);
+    cons.push(`${match.ingredient.category}: ${match.ingredient.reason}`);
   }
 
-  if (ia.preservatives.length > 0) {
-    score -= 8;
-    cons.push(`Conservantes: ${ia.preservatives.join(", ")}`);
+  // Level 3: -3 per ingredient (mild)
+  for (const match of ia.harmfulMatches.filter((m) => m.ingredient.level === 3)) {
+    score -= 3;
   }
 
-  if (ia.ultraProcessedMarkers.length > 0) {
-    score -= 12;
-    warnings.push(`Ingredientes ultra-procesados: ${ia.ultraProcessedMarkers.join(", ")}`);
-  }
-
-  if (ia.flavorEnhancers.length > 0) {
-    score -= 8;
-    cons.push(`Saborizantes/potenciadores: ${ia.flavorEnhancers.join(", ")}`);
+  // Additives penalty from Open Food Facts
+  if (info.additives.length > 5) {
+    score -= 10;
+  } else if (info.additives.length > 2) {
+    score -= 5;
   }
 
   if (ia.hasAddedSugar) {
-    score -= 10;
+    score -= 8;
     cons.push("Contiene azucar añadida");
   }
 
   if (ia.hasAddedWater && ia.hasAddedSugar) {
     score -= 5;
-    cons.push("Primer ingrediente es agua — producto diluido");
   }
 
-  // === NUTRITIONAL BONUSES/PENALTIES (secondary) ===
+  // === NUTRITIONAL BONUSES (secondary) ===
 
-  if (info.sugars > 15) {
-    score -= 5;
-  } else if (info.sugars <= 2 && info.calories > 0) {
-    score += 3;
-  }
-
+  if (info.sugars > 15) score -= 5;
   if (info.fiber >= 3) {
     score += 3;
     pros.push(`Buena fuente de fibra: ${info.fiber}g`);
   }
-
   if (info.protein >= 7) {
     score += 3;
     pros.push(`Buena fuente de proteina: ${info.protein}g`);
   }
-
   if (info.transFat > 0) {
     score -= 10;
-    warnings.push(`Contiene grasas trans: ${info.transFat}g`);
   }
 
-  // === POSITIVE INGREDIENT SIGNALS ===
+  // === POSITIVE SIGNALS ===
 
-  if (ia.totalCount > 0 && ia.totalCount <= 3 && ia.classification === "natural") {
-    score += 5;
-    pros.push("Ingredientes simples y reconocibles");
-  }
-
-  if (info.additives.length === 0 && ia.totalCount > 0) {
-    pros.push("Sin aditivos artificiales");
+  if (ia.harmfulMatches.length === 0 && ia.totalCount > 0 && info.additives.length === 0) {
+    pros.push("Sin ingredientes nocivos detectados");
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -277,8 +203,16 @@ function calculateHealthScore(info: NutritionalInfo): {
 
 export function analyzeProducts(products: ScannedProduct[]): AnalysisResult {
   const analyses: ProductAnalysis[] = products.map((product) => {
+    console.log(`[SanIA Analyzer] Product: ${product.name}`);
+    console.log(`[SanIA Analyzer] Ingredients (${product.nutritionalInfo.ingredients.length}):`, product.nutritionalInfo.ingredients.slice(0, 10));
+    console.log(`[SanIA Analyzer] Additives (${product.nutritionalInfo.additives.length}):`, product.nutritionalInfo.additives.slice(0, 10));
+
     const { score, pros, cons, warnings, ingredientAnalysis } =
       calculateHealthScore(product.nutritionalInfo);
+
+    console.log(`[SanIA Analyzer] Score: ${score}, Classification: ${ingredientAnalysis.classification}`);
+    console.log(`[SanIA Analyzer] Harmful matches: ${ingredientAnalysis.harmfulMatches.length} (L1:${ingredientAnalysis.level1Count} L2:${ingredientAnalysis.level2Count} L3:${ingredientAnalysis.level3Count})`);
+
     return {
       productId: product.id,
       name: product.name,
@@ -293,7 +227,6 @@ export function analyzeProducts(products: ScannedProduct[]): AnalysisResult {
   });
 
   analyses.sort((a, b) => b.healthScore - a.healthScore);
-
   const winner = analyses[0];
 
   return {

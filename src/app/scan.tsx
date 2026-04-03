@@ -94,7 +94,7 @@ export default function ScanScreen() {
 
       addProductFromLookup(barcode, lookupResult);
     } catch (error) {
-      console.error("[SanIA] Lookup error:", error);
+      console.warn("[SanIA] Lookup error:", error);
       Alert.alert(
         "Error de conexion",
         "No se pudo buscar el producto.",
@@ -146,7 +146,7 @@ export default function ScanScreen() {
       if (result.canceled || !result.assets[0]) return;
       photoUri = result.assets[0].uri;
     } catch (e) {
-      console.error("[SanIA] Camera error:", e);
+      console.warn("[SanIA] Camera error:", e);
       Alert.alert("Error", "No se pudo abrir la camara.");
       return;
     }
@@ -289,7 +289,7 @@ export default function ScanScreen() {
         router.push("/results");
       },
       onError: (error) => {
-        console.error("[SanIA] Analysis error:", error);
+        console.warn("[SanIA] Analysis error:", error);
         Alert.alert("Error", "No se pudieron analizar los productos.");
       },
     });

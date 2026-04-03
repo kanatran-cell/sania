@@ -1,7 +1,11 @@
 export interface ScannedProduct {
   id: string;
-  imageUri: string;
-  imageBase64?: string;
+  barcode: string;
+  name: string;
+  brand: string;
+  imageUri?: string;
+  imageUrl?: string;
+  nutritionalInfo: NutritionalInfo;
   timestamp: number;
 }
 

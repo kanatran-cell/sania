@@ -8,7 +8,6 @@ interface ProductState {
 
   addProduct: (product: ScannedProduct) => void;
   removeProduct: (id: string) => void;
-  clearProducts: () => void;
   setAnalysisResult: (result: AnalysisResult | null) => void;
   setIsAnalyzing: (value: boolean) => void;
   reset: () => void;
@@ -29,10 +28,7 @@ export const useProductStore = create<ProductState>((set) => ({
       scannedProducts: state.scannedProducts.filter((p) => p.id !== id),
     })),
 
-  clearProducts: () => set({ scannedProducts: [] }),
-
   setAnalysisResult: (result) => set({ analysisResult: result }),
-
   setIsAnalyzing: (value) => set({ isAnalyzing: value }),
 
   reset: () =>

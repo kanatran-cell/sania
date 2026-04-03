@@ -1,416 +1,197 @@
-import {
-  View,
-  Text,
-  Pressable,
-  Image,
-  ScrollView,
-  useColorScheme,
-} from "react-native";
+import { View, Text, Pressable, Image, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  SlideInRight,
-} from "react-native-reanimated";
 import { useProductStore } from "../stores/useProductStore";
 import { getHealthColor, getHealthLabel } from "../constants/theme";
 import type { ProductAnalysis } from "../types/product";
 
 export default function ResultsScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-
   const analysisResult = useProductStore((s) => s.analysisResult);
   const scannedProducts = useProductStore((s) => s.scannedProducts);
   const reset = useProductStore((s) => s.reset);
 
-  const bg = isDark ? "bg-slate-900" : "bg-gray-50";
-  const cardBg = isDark ? "bg-slate-800" : "bg-white";
-  const textPrimary = isDark ? "text-white" : "text-text-primary";
-  const textSecondary = isDark ? "text-slate-400" : "text-text-secondary";
-  const borderColor = isDark ? "border-slate-700" : "border-gray-100";
-
   if (!analysisResult) {
     return (
-      <SafeAreaView
-        className={`flex-1 ${bg} justify-center items-center px-8`}
-      >
-        <Ionicons
-          name="alert-circle-outline"
-          size={48}
-          color={isDark ? "#64748B" : "#94A3B8"}
-        />
-        <Text className={`${textSecondary} text-lg mt-4 text-center`}>
-          No hay resultados disponibles
-        </Text>
-        <Pressable
-          className="mt-6 bg-primary px-8 py-3 rounded-2xl"
-          onPress={() => router.replace("/")}
-        >
-          <Text className="text-white font-semibold">Volver al inicio</Text>
+      <SafeAreaView style={[s.container, { justifyContent: "center", alignItems: "center" }]}>
+        <Text style={{ color: "#64748B", fontSize: 18 }}>No hay resultados</Text>
+        <Pressable style={[s.newBtn, { marginTop: 24 }]} onPress={() => { reset(); router.replace("/"); }}>
+          <Text style={s.newBtnText}>Volver al inicio</Text>
         </Pressable>
       </SafeAreaView>
     );
   }
 
-  const winner = analysisResult.products.find(
-    (p) => p.productId === analysisResult.winnerId
-  );
-  const winnerImage = scannedProducts.find(
-    (p) => p.id === analysisResult.winnerId
-  );
-  const sortedProducts = [...analysisResult.products].sort(
-    (a, b) => b.healthScore - a.healthScore
-  );
+  const winner = analysisResult.products.find((p) => p.productId === analysisResult.winnerId);
+  const winnerImage = scannedProducts.find((p) => p.id === analysisResult.winnerId);
+  const sorted = [...analysisResult.products].sort((a, b) => b.healthScore - a.healthScore);
 
-  function handleNewComparison() {
-    reset();
-    router.replace("/");
-  }
-
-  function getProductImage(productId: string) {
-    return scannedProducts.find((p) => p.id === productId)?.imageUri;
+  function getProductImage(id: string) {
+    const p = scannedProducts.find((sp) => sp.id === id);
+    return p?.imageUrl || p?.imageUri;
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${bg}`}>
+    <SafeAreaView style={s.container}>
       {/* Header */}
-      <View
-        className={`flex-row items-center justify-between px-4 py-3 ${cardBg} border-b ${borderColor}`}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          className="p-2"
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={isDark ? "#E2E8F0" : "#0F172A"}
-          />
+      <View style={s.header}>
+        <Pressable onPress={() => router.back()} style={{ padding: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
-        <Text className={`text-lg font-semibold ${textPrimary}`}>
-          Resultados
-        </Text>
-        <View className="w-10" />
+        <Text style={s.headerTitle}>Resultados</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* Winner Card */}
         {winner && (
-          <Animated.View
-            entering={FadeInDown.duration(600).springify()}
-            className={`mx-4 mt-4 ${cardBg} rounded-3xl p-6 shadow-md border-2 border-success`}
-          >
-            <View className="items-center">
-              {/* Badge */}
-              <Animated.View
-                entering={FadeIn.duration(400).delay(300)}
-                className="bg-success/10 rounded-full px-5 py-1.5 mb-4"
-              >
-                <View className="flex-row items-center">
-                  <Ionicons name="trophy" size={16} color="#22C55E" />
-                  <Text className="text-success font-bold ml-1.5 text-sm">
-                    MAS SALUDABLE
-                  </Text>
-                </View>
-              </Animated.View>
-
-              {winnerImage && (
-                <Animated.View entering={FadeIn.duration(500).delay(200)}>
-                  <Image
-                    source={{ uri: winnerImage.imageUri }}
-                    className="w-32 h-32 rounded-2xl mb-4"
-                    accessibilityLabel={`Producto ganador: ${winner.name}`}
-                  />
-                </Animated.View>
-              )}
-
-              <Text
-                className={`text-2xl font-bold ${textPrimary} text-center`}
-              >
-                {winner.name}
-              </Text>
-              <Text className={`${textSecondary} text-base mb-4`}>
-                {winner.brand}
-              </Text>
-
-              {/* Health Score */}
-              <Animated.View
-                entering={FadeIn.duration(600).delay(400)}
-                className="items-center mb-5"
-              >
-                <View
-                  className="w-24 h-24 rounded-full items-center justify-center"
-                  style={{
-                    backgroundColor:
-                      getHealthColor(winner.healthScore) + "20",
-                  }}
-                >
-                  <Text
-                    className="text-4xl font-bold"
-                    style={{ color: getHealthColor(winner.healthScore) }}
-                  >
-                    {winner.healthScore}
-                  </Text>
-                </View>
-                <Text
-                  className="text-sm font-semibold mt-2"
-                  style={{ color: getHealthColor(winner.healthScore) }}
-                >
-                  {getHealthLabel(winner.healthScore)}
-                </Text>
-              </Animated.View>
-
-              {/* Pros */}
-              {winner.pros.length > 0 && (
-                <View className="w-full">
-                  {winner.pros.map((pro, i) => (
-                    <Animated.View
-                      key={i}
-                      entering={SlideInRight.duration(300).delay(500 + i * 100)}
-                      className="flex-row items-start mb-2"
-                    >
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={16}
-                        color="#22C55E"
-                      />
-                      <Text
-                        className={`${textPrimary} text-sm ml-2 flex-1`}
-                      >
-                        {pro}
-                      </Text>
-                    </Animated.View>
-                  ))}
-                </View>
-              )}
+          <View style={s.winnerCard}>
+            <View style={s.winnerBadge}>
+              <Ionicons name="trophy" size={16} color="#22C55E" />
+              <Text style={s.winnerBadgeText}>MAS SALUDABLE</Text>
             </View>
-          </Animated.View>
+
+            {winnerImage && (winnerImage.imageUrl || winnerImage.imageUri) && (
+              <Image source={{ uri: winnerImage.imageUrl || winnerImage.imageUri }} style={s.winnerImage} />
+            )}
+
+            <Text style={s.winnerName}>{winner.name}</Text>
+            <Text style={s.winnerBrand}>{winner.brand}</Text>
+
+            <View style={[s.scoreCircle, { backgroundColor: getHealthColor(winner.healthScore) + "20" }]}>
+              <Text style={[s.scoreText, { color: getHealthColor(winner.healthScore) }]}>{winner.healthScore}</Text>
+            </View>
+            <Text style={[s.scoreLabel, { color: getHealthColor(winner.healthScore) }]}>
+              {getHealthLabel(winner.healthScore)}
+            </Text>
+
+            {winner.pros.map((pro, i) => (
+              <View key={i} style={s.proRow}>
+                <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                <Text style={s.proText}>{pro}</Text>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Summary */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(300)}
-          className={`mx-4 mt-4 ${isDark ? "bg-blue-500/10" : "bg-blue-50"} rounded-2xl p-4`}
-        >
-          <View className="flex-row items-start">
-            <Ionicons
-              name="bulb"
-              size={20}
-              color={isDark ? "#60A5FA" : "#3B82F6"}
-            />
-            <Text
-              className={`${isDark ? "text-blue-300" : "text-blue-800"} text-sm ml-2 flex-1`}
-            >
-              {analysisResult.summary}
-            </Text>
-          </View>
-        </Animated.View>
+        <View style={s.summaryBox}>
+          <Ionicons name="bulb" size={20} color="#3B82F6" />
+          <Text style={s.summaryText}>{analysisResult.summary}</Text>
+        </View>
 
         {/* Ranking */}
-        <Text
-          className={`text-xs font-semibold ${textSecondary} px-6 mt-6 mb-3 tracking-wider`}
-        >
-          RANKING COMPLETO
-        </Text>
+        <Text style={s.sectionLabel}>RANKING COMPLETO</Text>
 
-        {sortedProducts.map((product, index) => (
-          <Animated.View
+        {sorted.map((product, index) => (
+          <ProductCard
             key={product.productId}
-            entering={FadeInDown.duration(400).delay(400 + index * 150)}
-          >
-            <ProductResultCard
-              product={product}
-              rank={index + 1}
-              imageUri={getProductImage(product.productId)}
-              isWinner={product.productId === analysisResult.winnerId}
-              isDark={isDark}
-              cardBg={cardBg}
-              textPrimary={textPrimary}
-              textSecondary={textSecondary}
-            />
-          </Animated.View>
+            product={product}
+            rank={index + 1}
+            imageUri={getProductImage(product.productId)}
+            isWinner={product.productId === analysisResult.winnerId}
+          />
         ))}
 
         {/* New Comparison */}
-        <Animated.View
-          entering={FadeInUp.duration(500).delay(800)}
-          className="px-4 py-6"
-        >
-          <Pressable
-            className="bg-primary py-4 rounded-2xl items-center active:opacity-80 shadow-lg"
-            onPress={handleNewComparison}
-            accessibilityRole="button"
-            accessibilityLabel="Iniciar nueva comparacion"
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="refresh" size={20} color="white" />
-              <Text className="text-white font-semibold ml-2 text-base">
-                Nueva Comparacion
-              </Text>
-            </View>
+        <View style={{ padding: 16, paddingBottom: 32 }}>
+          <Pressable style={s.newBtn} onPress={() => { reset(); router.replace("/"); }}>
+            <Ionicons name="refresh" size={20} color="white" />
+            <Text style={s.newBtnText}>Nueva Comparacion</Text>
           </Pressable>
-        </Animated.View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function ProductResultCard({
-  product,
-  rank,
-  imageUri,
-  isWinner,
-  isDark,
-  cardBg,
-  textPrimary,
-  textSecondary,
-}: {
-  product: ProductAnalysis;
-  rank: number;
-  imageUri?: string;
-  isWinner: boolean;
-  isDark: boolean;
-  cardBg: string;
-  textPrimary: string;
-  textSecondary: string;
+function ProductCard({ product, rank, imageUri, isWinner }: {
+  product: ProductAnalysis; rank: number; imageUri?: string; isWinner: boolean;
 }) {
-  const healthColor = getHealthColor(product.healthScore);
-
+  const color = getHealthColor(product.healthScore);
   return (
-    <View
-      className={`mx-4 mb-3 ${cardBg} rounded-2xl p-4 ${
-        isWinner ? "border border-success/30" : `border ${isDark ? "border-slate-700" : "border-gray-100"}`
-      }`}
-    >
-      <View className="flex-row items-center">
-        {/* Rank */}
-        <View
-          className="w-9 h-9 rounded-full items-center justify-center mr-3"
-          style={{ backgroundColor: healthColor + "20" }}
-        >
-          <Text className="font-bold text-sm" style={{ color: healthColor }}>
-            #{rank}
-          </Text>
+    <View style={[s.card, isWinner && { borderColor: "#22C55E40", borderWidth: 1 }]}>
+      <View style={s.cardRow}>
+        <View style={[s.rankCircle, { backgroundColor: color + "20" }]}>
+          <Text style={[s.rankText, { color }]}>#{rank}</Text>
         </View>
-
-        {/* Image */}
-        {imageUri && (
-          <Image
-            source={{ uri: imageUri }}
-            className="w-14 h-14 rounded-xl mr-3"
-            accessibilityLabel={product.name}
-          />
-        )}
-
-        {/* Info */}
-        <View className="flex-1">
-          <Text className={`font-semibold ${textPrimary}`}>
-            {product.name}
-          </Text>
-          <Text className={`${textSecondary} text-sm`}>{product.brand}</Text>
+        {imageUri && <Image source={{ uri: imageUri }} style={s.cardImage} />}
+        <View style={{ flex: 1 }}>
+          <Text style={s.cardName}>{product.name}</Text>
+          <Text style={s.cardBrand}>{product.brand}</Text>
         </View>
-
-        {/* Score */}
-        <View className="items-center">
-          <Text className="text-2xl font-bold" style={{ color: healthColor }}>
-            {product.healthScore}
-          </Text>
-          <Text className="text-xs font-medium" style={{ color: healthColor }}>
-            {getHealthLabel(product.healthScore)}
-          </Text>
+        <View style={{ alignItems: "center" }}>
+          <Text style={[s.cardScore, { color }]}>{product.healthScore}</Text>
+          <Text style={[s.cardScoreLabel, { color }]}>{getHealthLabel(product.healthScore)}</Text>
         </View>
       </View>
 
-      {/* Nutrient pills */}
-      <View className="flex-row flex-wrap mt-3 gap-2">
-        <NutrientPill
-          label="Cal"
-          value={`${product.nutritionalInfo.calories}`}
-          isDark={isDark}
-        />
-        <NutrientPill
-          label="Azucar"
-          value={`${product.nutritionalInfo.sugars}g`}
-          isDark={isDark}
-        />
-        <NutrientPill
-          label="Sodio"
-          value={`${product.nutritionalInfo.sodium}mg`}
-          isDark={isDark}
-        />
-        <NutrientPill
-          label="Proteina"
-          value={`${product.nutritionalInfo.protein}g`}
-          isDark={isDark}
-        />
-        <NutrientPill
-          label="Fibra"
-          value={`${product.nutritionalInfo.fiber}g`}
-          isDark={isDark}
-        />
+      <View style={s.pillsRow}>
+        <Pill label="Cal" value={`${product.nutritionalInfo.calories}`} />
+        <Pill label="Azucar" value={`${product.nutritionalInfo.sugars}g`} />
+        <Pill label="Sodio" value={`${product.nutritionalInfo.sodium}mg`} />
+        <Pill label="Proteina" value={`${product.nutritionalInfo.protein}g`} />
       </View>
 
-      {/* Warnings */}
-      {product.warnings.length > 0 && (
-        <View className="mt-3">
-          {product.warnings.map((warning, i) => (
-            <View key={i} className="flex-row items-start mb-1">
-              <Ionicons name="warning" size={14} color="#F59E0B" />
-              <Text className={`${textSecondary} text-xs ml-1.5 flex-1`}>
-                {warning}
-              </Text>
-            </View>
-          ))}
+      {product.warnings.map((w, i) => (
+        <View key={i} style={s.warningRow}>
+          <Ionicons name="warning" size={14} color="#F59E0B" />
+          <Text style={s.warningText}>{w}</Text>
         </View>
-      )}
-
-      {/* Cons */}
-      {product.cons.length > 0 && (
-        <View className="mt-2">
-          {product.cons.map((con, i) => (
-            <View key={i} className="flex-row items-start mb-1">
-              <Ionicons name="close-circle" size={14} color="#EF4444" />
-              <Text className={`${textSecondary} text-xs ml-1.5 flex-1`}>
-                {con}
-              </Text>
-            </View>
-          ))}
+      ))}
+      {product.cons.map((c, i) => (
+        <View key={i} style={s.warningRow}>
+          <Ionicons name="close-circle" size={14} color="#EF4444" />
+          <Text style={s.warningText}>{c}</Text>
         </View>
-      )}
+      ))}
     </View>
   );
 }
 
-function NutrientPill({
-  label,
-  value,
-  isDark,
-}: {
-  label: string;
-  value: string;
-  isDark: boolean;
-}) {
+function Pill({ label, value }: { label: string; value: string }) {
   return (
-    <View
-      className={`${isDark ? "bg-slate-700" : "bg-gray-100"} rounded-full px-3 py-1`}
-    >
-      <Text
-        className={`text-xs ${isDark ? "text-slate-300" : "text-text-secondary"}`}
-      >
-        <Text
-          className={`font-semibold ${isDark ? "text-white" : "text-text-primary"}`}
-        >
-          {value}
-        </Text>{" "}
-        {label}
-      </Text>
+    <View style={s.pill}>
+      <Text style={s.pillValue}>{value}</Text>
+      <Text style={s.pillLabel}> {label}</Text>
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: "#0F172A" },
+  winnerCard: { margin: 16, backgroundColor: "#fff", borderRadius: 20, padding: 24, alignItems: "center", borderWidth: 2, borderColor: "#22C55E" },
+  winnerBadge: { flexDirection: "row", alignItems: "center", backgroundColor: "#22C55E10", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginBottom: 16 },
+  winnerBadgeText: { color: "#22C55E", fontWeight: "bold", marginLeft: 6, fontSize: 13 },
+  winnerImage: { width: 128, height: 128, borderRadius: 16, marginBottom: 16 },
+  winnerName: { fontSize: 22, fontWeight: "bold", color: "#0F172A", textAlign: "center" },
+  winnerBrand: { color: "#64748B", fontSize: 16, marginBottom: 16 },
+  scoreCircle: { width: 96, height: 96, borderRadius: 48, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  scoreText: { fontSize: 40, fontWeight: "bold" },
+  scoreLabel: { fontSize: 14, fontWeight: "600", marginBottom: 16 },
+  proRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 6, width: "100%" },
+  proText: { color: "#0F172A", fontSize: 14, marginLeft: 8, flex: 1 },
+  summaryBox: { marginHorizontal: 16, marginTop: 16, backgroundColor: "#EFF6FF", borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "flex-start" },
+  summaryText: { color: "#1E40AF", fontSize: 14, marginLeft: 8, flex: 1 },
+  sectionLabel: { fontSize: 11, fontWeight: "600", color: "#64748B", paddingHorizontal: 24, marginTop: 24, marginBottom: 12, letterSpacing: 1 },
+  card: { marginHorizontal: 16, marginBottom: 12, backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#F1F5F9" },
+  cardRow: { flexDirection: "row", alignItems: "center" },
+  rankCircle: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  rankText: { fontWeight: "bold", fontSize: 13 },
+  cardImage: { width: 56, height: 56, borderRadius: 12, marginRight: 12 },
+  cardName: { fontWeight: "600", color: "#0F172A" },
+  cardBrand: { color: "#64748B", fontSize: 13 },
+  cardScore: { fontSize: 24, fontWeight: "bold" },
+  cardScoreLabel: { fontSize: 11, fontWeight: "500" },
+  pillsRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 8 },
+  pill: { flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  pillValue: { fontSize: 12, fontWeight: "600", color: "#0F172A" },
+  pillLabel: { fontSize: 12, color: "#64748B" },
+  warningRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 6 },
+  warningText: { color: "#64748B", fontSize: 12, marginLeft: 6, flex: 1 },
+  newBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  newBtnText: { color: "#fff", fontWeight: "600", fontSize: 16, marginLeft: 8 },
+});

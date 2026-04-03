@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -5,34 +6,30 @@ import {
   FlatList,
   Image,
   Alert,
-  useColorScheme,
+  StyleSheet,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-  ZoomIn,
-  ZoomOut,
-  LinearTransition,
-} from "react-native-reanimated";
-import { useCamera } from "../hooks/useCamera";
 import { useProductAnalysis } from "../hooks/useProductAnalysis";
 import { useProductStore } from "../stores/useProductStore";
+import { lookupBarcode } from "../services/openFoodFacts";
 import type { ScannedProduct } from "../types/product";
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+}
 
 export default function ScanScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const { captureProduct } = useCamera();
   const analysis = useProductAnalysis();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScanning, setIsScanning] = useState(true);
+  const [isLooking, setIsLooking] = useState(false);
+  const scannedBarcodesRef = useRef<Set<string>>(new Set());
 
   const scannedProducts = useProductStore((s) => s.scannedProducts);
   const addProduct = useProductStore((s) => s.addProduct);
@@ -41,21 +38,49 @@ export default function ScanScreen() {
 
   const canCompare = scannedProducts.length >= 2;
 
-  const bg = isDark ? "bg-slate-900" : "bg-white";
-  const textPrimary = isDark ? "text-white" : "text-text-primary";
-  const textSecondary = isDark ? "text-slate-400" : "text-text-secondary";
-  const borderColor = isDark ? "border-slate-700" : "border-gray-100";
-  const iconColor = isDark ? "#E2E8F0" : "#0F172A";
+  async function handleBarcodeScan(result: BarcodeScanningResult) {
+    const barcode = result.data;
 
-  async function handleCapture() {
+    // Prevent duplicate scans
+    if (scannedBarcodesRef.current.has(barcode) || isLooking) return;
+    scannedBarcodesRef.current.add(barcode);
+
+    setIsScanning(false);
+    setIsLooking(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     try {
-      const product = await captureProduct();
-      if (product) {
-        addProduct(product);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const lookupResult = await lookupBarcode(barcode);
+
+      if (!lookupResult.found) {
+        Alert.alert(
+          "Producto no encontrado",
+          `No se encontro el producto con codigo ${barcode} en la base de datos. Intenta con otro producto.`,
+          [{ text: "OK", onPress: () => { setIsScanning(true); setIsLooking(false); } }]
+        );
+        scannedBarcodesRef.current.delete(barcode);
+        return;
       }
-    } catch {
-      Alert.alert("Error", "No se pudo capturar la imagen. Intenta de nuevo.");
+
+      const product: ScannedProduct = {
+        id: generateId(),
+        barcode,
+        name: lookupResult.name,
+        brand: lookupResult.brand,
+        imageUrl: lookupResult.imageUrl,
+        nutritionalInfo: lookupResult.nutritionalInfo,
+        timestamp: Date.now(),
+      };
+
+      addProduct(product);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("[SanIA] Lookup error:", error);
+      Alert.alert("Error", "No se pudo buscar el producto. Verifica tu conexion a internet.");
+      scannedBarcodesRef.current.delete(barcode);
+    } finally {
+      setIsLooking(false);
+      setIsScanning(true);
     }
   }
 
@@ -66,147 +91,97 @@ export default function ScanScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.push("/results");
       },
-      onError: () => {
-        Alert.alert(
-          "Error",
-          "No se pudieron analizar los productos. Verifica tu conexion e intenta de nuevo."
-        );
+      onError: (error) => {
+        console.error("[SanIA] Analysis error:", error);
+        Alert.alert("Error", "No se pudieron analizar los productos.");
       },
     });
   }
 
   function handleRemove(id: string) {
+    const product = scannedProducts.find((p) => p.id === id);
+    if (product) scannedBarcodesRef.current.delete(product.barcode);
     removeProduct(id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  function renderProduct({ item }: { item: ScannedProduct }) {
+  // Permission not granted
+  if (!permission?.granted) {
     return (
-      <Animated.View
-        entering={ZoomIn.duration(300).springify()}
-        exiting={ZoomOut.duration(200)}
-        layout={LinearTransition.springify()}
-        className="mr-3 items-center"
-      >
-        <View className="relative">
-          <Image
-            source={{ uri: item.imageUri }}
-            className="w-24 h-24 rounded-xl"
-            accessibilityLabel="Producto escaneado"
-          />
-          <Pressable
-            className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 rounded-full items-center justify-center shadow-sm"
-            onPress={() => handleRemove(item.id)}
-            accessibilityRole="button"
-            accessibilityLabel="Eliminar producto"
-          >
-            <Ionicons name="close" size={14} color="white" />
+      <SafeAreaView style={s.container}>
+        <View style={s.permissionView}>
+          <Ionicons name="camera-outline" size={64} color="#6366F1" />
+          <Text style={s.permissionTitle}>Acceso a la camara</Text>
+          <Text style={s.permissionText}>
+            SanIA necesita tu camara para escanear codigos de barras de los productos.
+          </Text>
+          <Pressable style={s.permissionBtn} onPress={requestPermission}>
+            <Text style={s.permissionBtnText}>Permitir Camara</Text>
+          </Pressable>
+          <Pressable style={s.backLink} onPress={() => router.back()}>
+            <Text style={s.backLinkText}>Volver</Text>
           </Pressable>
         </View>
-        <Text className={`text-xs ${textSecondary} mt-1`}>
-          #{scannedProducts.indexOf(item) + 1}
-        </Text>
-      </Animated.View>
+      </SafeAreaView>
+    );
+  }
+
+  function renderProduct({ item }: { item: ScannedProduct }) {
+    const imgSource = item.imageUrl ? { uri: item.imageUrl } : item.imageUri ? { uri: item.imageUri } : null;
+    return (
+      <View style={s.productItem}>
+        {imgSource ? (
+          <Image source={imgSource} style={s.productImage} />
+        ) : (
+          <View style={[s.productImage, s.productPlaceholder]}>
+            <Ionicons name="cube-outline" size={24} color="#94A3B8" />
+          </View>
+        )}
+        <Text style={s.productName} numberOfLines={2}>{item.name}</Text>
+        <Pressable style={s.removeBtn} onPress={() => handleRemove(item.id)}>
+          <Ionicons name="close" size={14} color="white" />
+        </Pressable>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${bg}`}>
+    <SafeAreaView style={s.container}>
       {/* Header */}
-      <View
-        className={`flex-row items-center justify-between px-4 py-3 border-b ${borderColor}`}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          className="p-2"
-          accessibilityRole="button"
-          accessibilityLabel="Volver al inicio"
-        >
-          <Ionicons name="arrow-back" size={24} color={iconColor} />
+      <View style={s.header}>
+        <Pressable onPress={() => router.back()} style={{ padding: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
-        <Text className={`text-lg font-semibold ${textPrimary}`}>
-          Escanear Productos
-        </Text>
-        <View className="w-10" />
+        <Text style={s.headerTitle}>Escanear Productos</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <View className="flex-1">
-        {/* Main area */}
-        <View className="flex-1 justify-center items-center px-8">
-          {scannedProducts.length === 0 ? (
-            <Animated.View
-              entering={FadeIn.duration(400)}
-              className="items-center"
-            >
-              <View
-                className={`w-32 h-32 ${isDark ? "bg-indigo-500/10" : "bg-primary/5"} rounded-full items-center justify-center mb-6`}
-              >
-                <Ionicons
-                  name="camera"
-                  size={56}
-                  color={isDark ? "#818CF8" : "#6366F1"}
-                />
-              </View>
-              <Text
-                className={`text-xl font-semibold ${textPrimary} mb-2 text-center`}
-              >
-                Escanea tu primer producto
-              </Text>
-              <Text className={`${textSecondary} text-center mb-8`}>
-                Toma una foto de la etiqueta nutricional{"\n"}o del frente del
-                producto
-              </Text>
-            </Animated.View>
-          ) : (
-            <Animated.View
-              entering={FadeIn.duration(300)}
-              className="items-center"
-            >
-              <Text className="text-6xl font-bold text-primary mb-2">
-                {scannedProducts.length}
-              </Text>
-              <Text className={`${textSecondary} text-lg mb-2`}>
-                {scannedProducts.length === 1
-                  ? "producto escaneado"
-                  : "productos escaneados"}
-              </Text>
-              {!canCompare && (
-                <Animated.Text
-                  entering={FadeInDown.duration(300)}
-                  className="text-warning text-sm"
-                >
-                  Necesitas al menos 2 para comparar
-                </Animated.Text>
-              )}
-            </Animated.View>
-          )}
-
-          {/* Capture button */}
-          <AnimatedPressable
-            entering={FadeInDown.duration(500).delay(200).springify()}
-            className="w-20 h-20 bg-primary rounded-full items-center justify-center mt-8 active:opacity-80 shadow-xl"
-            onPress={handleCapture}
-            disabled={isAnalyzing}
-            accessibilityRole="button"
-            accessibilityLabel="Tomar foto del producto"
-          >
-            <Ionicons name="camera" size={32} color="white" />
-          </AnimatedPressable>
-          <Text className={`${textSecondary} text-sm mt-3`}>
-            Toca para escanear
-          </Text>
+      <View style={{ flex: 1 }}>
+        {/* Camera viewfinder */}
+        <View style={s.cameraWrap}>
+          <CameraView
+            style={s.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"],
+            }}
+            onBarcodeScanned={isScanning ? handleBarcodeScan : undefined}
+          />
+          {/* Overlay */}
+          <View style={s.overlay}>
+            <View style={s.scanFrame} />
+            <Text style={s.scanHint}>
+              {isLooking ? "Buscando producto..." : "Apunta al codigo de barras"}
+            </Text>
+            {isLooking && <ActivityIndicator size="large" color="#fff" style={{ marginTop: 12 }} />}
+          </View>
         </View>
 
-        {/* Scanned products list */}
+        {/* Scanned products */}
         {scannedProducts.length > 0 && (
-          <Animated.View
-            entering={FadeInDown.duration(400)}
-            className={`border-t ${borderColor} pt-4 pb-2`}
-          >
-            <Text
-              className={`text-xs font-semibold ${textSecondary} px-6 mb-3 tracking-wider`}
-            >
-              PRODUCTOS ESCANEADOS
+          <View style={s.listSection}>
+            <Text style={s.listLabel}>
+              {scannedProducts.length} PRODUCTO{scannedProducts.length !== 1 ? "S" : ""} ESCANEADO{scannedProducts.length !== 1 ? "S" : ""}
             </Text>
             <FlatList
               data={scannedProducts}
@@ -214,46 +189,27 @@ export default function ScanScreen() {
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 24 }}
+              contentContainerStyle={{ paddingHorizontal: 16 }}
             />
-          </Animated.View>
+          </View>
         )}
 
         {/* Compare button */}
-        <View className="px-6 pb-4 pt-2">
+        <View style={s.compareWrap}>
           <Pressable
-            className={`py-4 rounded-2xl items-center ${
-              canCompare && !isAnalyzing
-                ? "bg-success active:opacity-80 shadow-lg"
-                : isDark
-                  ? "bg-slate-800"
-                  : "bg-gray-200"
-            }`}
+            style={[s.compareBtn, canCompare && !isAnalyzing ? s.compareBtnActive : s.compareBtnDisabled]}
             onPress={handleCompare}
             disabled={!canCompare || isAnalyzing}
-            accessibilityRole="button"
-            accessibilityLabel="Comparar productos"
-            accessibilityState={{ disabled: !canCompare || isAnalyzing }}
           >
             {isAnalyzing ? (
-              <View className="flex-row items-center">
+              <View style={s.row}>
                 <ActivityIndicator size="small" color="#64748B" />
-                <Text className={`${textSecondary} font-semibold ml-2`}>
-                  Analizando...
-                </Text>
+                <Text style={s.compareBtnTextOff}>Analizando...</Text>
               </View>
             ) : (
-              <View className="flex-row items-center">
-                <Ionicons
-                  name="trophy"
-                  size={20}
-                  color={canCompare ? "white" : "#94A3B8"}
-                />
-                <Text
-                  className={`font-semibold ml-2 text-base ${
-                    canCompare ? "text-white" : "text-gray-400"
-                  }`}
-                >
+              <View style={s.row}>
+                <Ionicons name="trophy" size={20} color={canCompare ? "white" : "#94A3B8"} />
+                <Text style={canCompare ? s.compareBtnTextOn : s.compareBtnTextOff}>
                   Comparar ({scannedProducts.length})
                 </Text>
               </View>
@@ -264,3 +220,35 @@ export default function ScanScreen() {
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fff" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: "#0F172A" },
+  cameraWrap: { flex: 1, position: "relative", backgroundColor: "#000" },
+  camera: { flex: 1 },
+  overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  scanFrame: { width: 260, height: 160, borderWidth: 2, borderColor: "#6366F1", borderRadius: 16, backgroundColor: "transparent" },
+  scanHint: { color: "#fff", fontSize: 16, marginTop: 16, fontWeight: "500", textShadowColor: "#000", textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
+  listSection: { borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 12, paddingBottom: 8 },
+  listLabel: { fontSize: 11, fontWeight: "600", color: "#64748B", paddingHorizontal: 16, marginBottom: 8, letterSpacing: 1 },
+  productItem: { width: 100, marginRight: 12, alignItems: "center", position: "relative" },
+  productImage: { width: 80, height: 80, borderRadius: 12 },
+  productPlaceholder: { backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" },
+  productName: { fontSize: 11, color: "#0F172A", marginTop: 4, textAlign: "center" },
+  removeBtn: { position: "absolute", top: -4, right: 4, width: 24, height: 24, backgroundColor: "#EF4444", borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  compareWrap: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },
+  compareBtn: { paddingVertical: 16, borderRadius: 16, alignItems: "center" },
+  compareBtnActive: { backgroundColor: "#22C55E" },
+  compareBtnDisabled: { backgroundColor: "#E2E8F0" },
+  compareBtnTextOn: { color: "#fff", fontWeight: "600", fontSize: 16, marginLeft: 8 },
+  compareBtnTextOff: { color: "#94A3B8", fontWeight: "600", fontSize: 16, marginLeft: 8 },
+  row: { flexDirection: "row", alignItems: "center" },
+  permissionView: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
+  permissionTitle: { fontSize: 22, fontWeight: "bold", color: "#0F172A", marginTop: 24, marginBottom: 8 },
+  permissionText: { fontSize: 16, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 24 },
+  permissionBtn: { backgroundColor: "#6366F1", paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16 },
+  permissionBtnText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  backLink: { marginTop: 16 },
+  backLinkText: { color: "#6366F1", fontSize: 16 },
+});

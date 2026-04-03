@@ -9,10 +9,7 @@ export interface ScannedProduct {
   timestamp: number;
 }
 
-export interface NutritionalInfo {
-  productName: string;
-  brand: string;
-  servingSize: string;
+export interface NutrientValues {
   calories: number;
   totalFat: number;
   saturatedFat: number;
@@ -23,8 +20,29 @@ export interface NutritionalInfo {
   addedSugars: number;
   fiber: number;
   protein: number;
+}
+
+export interface NutritionalInfo extends NutrientValues {
+  productName: string;
+  brand: string;
+  servingSize: string;
+  perServing: NutrientValues;
   ingredients: string[];
   additives: string[];
+}
+
+export interface IngredientAnalysis {
+  totalCount: number;
+  artificialSweeteners: string[];
+  artificialColorants: string[];
+  preservatives: string[];
+  ultraProcessedMarkers: string[];
+  flavorEnhancers: string[];
+  hasAddedSugar: boolean;
+  hasAddedWater: boolean;
+  firstIngredient: string;
+  classification: "natural" | "minimal" | "processed" | "ultra_processed";
+  verdict: string;
 }
 
 export interface ProductAnalysis {
@@ -36,6 +54,7 @@ export interface ProductAnalysis {
   pros: string[];
   cons: string[];
   warnings: string[];
+  ingredientAnalysis?: IngredientAnalysis;
 }
 
 export interface AnalysisResult {

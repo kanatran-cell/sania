@@ -1,4 +1,4 @@
-import type { NutritionalInfo } from "../types/product";
+import type { NutritionalInfo, NutrientValues } from "../types/product";
 
 const BASE_URL = "https://world.openfoodfacts.org/api/v0/product";
 
@@ -29,32 +29,80 @@ export async function lookupBarcode(barcode: string): Promise<ProductLookupResul
   const p = data.product;
   const n = p.nutriments || {};
 
-  console.log("[SanIA] Found product:", p.product_name, "by", p.brands);
-  console.log("[SanIA] Nutriments:", JSON.stringify(n).substring(0, 300));
+  const name = p.product_name || p.product_name_es || "Producto";
+  const brand = p.brands || "Marca desconocida";
+
+  console.log("[SanIA] Found product:", name, "by", brand);
+
+  // Values per 100g (used for health scoring / comparison)
+  const per100g: NutrientValues = {
+    calories: Math.round(n["energy-kcal_100g"] || (n["energy_100g"] ? n["energy_100g"] / 4.184 : 0)),
+    totalFat: round(n["fat_100g"] || 0),
+    saturatedFat: round(n["saturated-fat_100g"] || 0),
+    transFat: round(n["trans-fat_100g"] || 0),
+    sodium: Math.round((n["sodium_100g"] || 0) * 1000),
+    totalCarbs: round(n["carbohydrates_100g"] || 0),
+    sugars: round(n["sugars_100g"] || 0),
+    addedSugars: round(n["added-sugars_100g"] || 0),
+    fiber: round(n["fiber_100g"] || 0),
+    protein: round(n["proteins_100g"] || 0),
+  };
+
+  // Values per serving (used for display, matches the product label)
+  const perServing: NutrientValues = {
+    calories: Math.round(n["energy-kcal_serving"] || (n["energy_serving"] ? n["energy_serving"] / 4.184 : 0)),
+    totalFat: round(n["fat_serving"] || 0),
+    saturatedFat: round(n["saturated-fat_serving"] || 0),
+    transFat: round(n["trans-fat_serving"] || 0),
+    sodium: Math.round((n["sodium_serving"] || 0) * 1000),
+    totalCarbs: round(n["carbohydrates_serving"] || 0),
+    sugars: round(n["sugars_serving"] || 0),
+    addedSugars: round(n["added-sugars_serving"] || 0),
+    fiber: round(n["fiber_serving"] || 0),
+    protein: round(n["proteins_serving"] || 0),
+  };
 
   return {
     found: true,
-    name: p.product_name || p.product_name_es || "Producto",
-    brand: p.brands || "Marca desconocida",
+    name,
+    brand,
     imageUrl: p.image_front_url || p.image_url || undefined,
     nutritionalInfo: {
-      productName: p.product_name || p.product_name_es || "Producto",
-      brand: p.brands || "Marca desconocida",
+      productName: name,
+      brand,
       servingSize: p.serving_size || p.quantity || "No especificado",
-      calories: Math.round(n["energy-kcal_100g"] || n["energy-kcal_serving"] || n["energy_100g"] / 4.184 || 0),
-      totalFat: round(n["fat_100g"] || 0),
-      saturatedFat: round(n["saturated-fat_100g"] || 0),
-      transFat: round(n["trans-fat_100g"] || 0),
-      sodium: Math.round((n["sodium_100g"] || 0) * 1000), // API gives grams, convert to mg
-      totalCarbs: round(n["carbohydrates_100g"] || 0),
-      sugars: round(n["sugars_100g"] || 0),
-      addedSugars: round(n["added-sugars_100g"] || 0),
-      fiber: round(n["fiber_100g"] || 0),
-      protein: round(n["proteins_100g"] || 0),
+      ...per100g,
+      perServing,
       ingredients: extractIngredients(p),
       additives: extractAdditives(p),
     },
   };
+}
+
+export interface SearchResult {
+  barcode: string;
+  name: string;
+  brand: string;
+  imageUrl?: string;
+}
+
+export async function searchProducts(query: string): Promise<SearchResult[]> {
+  console.log("[SanIA] Searching products:", query);
+
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=true&page_size=10&fields=code,product_name,brands,image_front_small_url`;
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (!data.products || data.products.length === 0) return [];
+
+  return data.products
+    .filter((p: Record<string, unknown>) => p.product_name && p.code)
+    .map((p: Record<string, unknown>) => ({
+      barcode: p.code as string,
+      name: (p.product_name || "Producto") as string,
+      brand: (p.brands || "") as string,
+      imageUrl: (p.image_front_small_url || undefined) as string | undefined,
+    }));
 }
 
 function round(val: number): number {
@@ -64,11 +112,7 @@ function round(val: number): number {
 function extractIngredients(product: Record<string, unknown>): string[] {
   const text = (product.ingredients_text_es || product.ingredients_text || "") as string;
   if (!text) return [];
-  return text
-    .split(/[,;]/)
-    .map((i) => i.trim())
-    .filter((i) => i.length > 1 && i.length < 80)
-    .slice(0, 30);
+  return text.split(/[,;]/).map((i) => i.trim()).filter((i) => i.length > 1 && i.length < 80).slice(0, 30);
 }
 
 function extractAdditives(product: Record<string, unknown>): string[] {
@@ -78,20 +122,16 @@ function extractAdditives(product: Record<string, unknown>): string[] {
 }
 
 function emptyNutrition(): NutritionalInfo {
+  const empty: NutrientValues = {
+    calories: 0, totalFat: 0, saturatedFat: 0, transFat: 0,
+    sodium: 0, totalCarbs: 0, sugars: 0, addedSugars: 0, fiber: 0, protein: 0,
+  };
   return {
     productName: "Producto no encontrado",
     brand: "Desconocido",
     servingSize: "No especificado",
-    calories: 0,
-    totalFat: 0,
-    saturatedFat: 0,
-    transFat: 0,
-    sodium: 0,
-    totalCarbs: 0,
-    sugars: 0,
-    addedSugars: 0,
-    fiber: 0,
-    protein: 0,
+    ...empty,
+    perServing: empty,
     ingredients: [],
     additives: [],
   };

@@ -119,7 +119,6 @@ function ClassificationBadge({ ia, large }: { ia: IngredientAnalysis; large?: bo
     <View style={[s.classBadge, { backgroundColor: cls.bg }, large && { paddingHorizontal: 20, paddingVertical: 8 }]}>
       <Ionicons name={cls.icon} size={large ? 18 : 14} color={cls.color} />
       <Text style={[s.classBadgeText, { color: cls.color }, large && { fontSize: 15 }]}>{cls.label}</Text>
-      <Text style={[s.classBadgeCount, { color: cls.color }]}>{ia.totalCount} ingredientes</Text>
     </View>
   );
 }

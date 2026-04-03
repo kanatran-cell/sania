@@ -89,9 +89,31 @@ export interface SearchResult {
 export async function searchProducts(query: string): Promise<SearchResult[]> {
   console.log("[SanIA] Searching products:", query);
 
-  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=true&page_size=10&fields=code,product_name,brands,image_front_small_url`;
-  const response = await fetch(url);
-  const data = await response.json();
+  const url = `https://world.openfoodfacts.net/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=true&page_size=10&fields=code,product_name,brands,image_front_small_url`;
+  console.log("[SanIA] Search URL:", url);
+
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "SanIA/1.0 (Android; contact: kanatran@gmail.com)",
+    },
+  });
+
+  console.log("[SanIA] Search response status:", response.status);
+
+  if (!response.ok) {
+    throw new Error(`Search failed with status ${response.status}`);
+  }
+
+  const text = await response.text();
+  console.log("[SanIA] Search response length:", text.length);
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    console.error("[SanIA] Failed to parse search response:", text.substring(0, 200));
+    throw new Error("Invalid response from server");
+  }
 
   if (!data.products || data.products.length === 0) return [];
 

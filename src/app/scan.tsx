@@ -10,6 +10,9 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,7 +38,7 @@ export default function ScanScreen() {
   const [isLooking, setIsLooking] = useState(false);
   const scannedBarcodesRef = useRef<Set<string>>(new Set());
   const scanCountRef = useRef<Record<string, number>>({});
-  const REQUIRED_READS = 3;
+  const REQUIRED_READS = 5;
 
   // Search modal state
   const [showSearch, setShowSearch] = useState(false);
@@ -44,6 +47,12 @@ export default function ScanScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isAddingFromSearch, setIsAddingFromSearch] = useState(false);
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | undefined>();
+
+  // Manual entry modal state
+  const [showManual, setShowManual] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualBrand, setManualBrand] = useState("");
+  const [manualIngredients, setManualIngredients] = useState("");
 
   const scannedProducts = useProductStore((s) => s.scannedProducts);
   const addProduct = useProductStore((s) => s.addProduct);
@@ -174,6 +183,63 @@ export default function ScanScreen() {
   function closeSearch() {
     setShowSearch(false);
     setIsScanning(true);
+  }
+
+  function openManualEntry() {
+    setShowSearch(false);
+    setManualName(searchQuery || "");
+    setManualBrand("");
+    setManualIngredients("");
+    setShowManual(true);
+  }
+
+  function closeManual() {
+    setShowManual(false);
+    setIsScanning(true);
+  }
+
+  function handleAddManual() {
+    const name = manualName.trim();
+    if (!name) {
+      Alert.alert("Nombre requerido", "Escribe el nombre del producto.");
+      return;
+    }
+    const ingredientsList = manualIngredients
+      .split(",")
+      .map((i) => i.trim())
+      .filter((i) => i.length > 0);
+
+    if (ingredientsList.length === 0) {
+      Alert.alert("Ingredientes requeridos", "Escribe los ingredientes separados por coma. Los encuentras en el envase del producto.");
+      return;
+    }
+
+    const emptyNutrients = {
+      calories: 0, totalFat: 0, saturatedFat: 0, transFat: 0,
+      sodium: 0, totalCarbs: 0, sugars: 0, addedSugars: 0, fiber: 0, protein: 0,
+    };
+
+    const product: ScannedProduct = {
+      id: generateId(),
+      barcode: "manual-" + Date.now(),
+      name,
+      brand: manualBrand.trim() || "Marca no especificada",
+      imageUri: capturedPhotoUri,
+      nutritionalInfo: {
+        productName: name,
+        brand: manualBrand.trim() || "Marca no especificada",
+        servingSize: "No especificado",
+        ...emptyNutrients,
+        perServing: emptyNutrients,
+        ingredients: ingredientsList,
+        additives: [],
+      },
+      timestamp: Date.now(),
+    };
+
+    addProduct(product);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    closeManual();
   }
 
   async function handleSearch() {
@@ -456,12 +522,20 @@ export default function ScanScreen() {
             keyExtractor={(item) => item.barcode}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
             ListEmptyComponent={
-              searchQuery.length > 0 && !isSearching ? (
+              !isSearching ? (
                 <View style={s.emptySearch}>
                   <Ionicons name="search-outline" size={48} color="#CBD5E1" />
                   <Text style={s.emptySearchText}>
-                    Escribe el nombre del producto y presiona buscar
+                    {searchQuery.length > 0
+                      ? "No se encontraron resultados"
+                      : "Escribe el nombre del producto y presiona buscar"}
                   </Text>
+                  {searchQuery.length > 0 && (
+                    <Pressable style={[s.manualEntryBtn, { marginTop: 20, paddingHorizontal: 24 }]} onPress={openManualEntry}>
+                      <Ionicons name="create-outline" size={20} color="#6366F1" />
+                      <Text style={s.manualEntryBtnText}>Agregar manualmente</Text>
+                    </Pressable>
+                  )}
                 </View>
               ) : null
             }
@@ -495,6 +569,11 @@ export default function ScanScreen() {
                       <Ionicons name="arrow-forward-circle" size={28} color="#6366F1" />
                     </View>
                   </Pressable>
+                  <View style={s.notFoundDivider} />
+                  <Pressable style={s.manualEntryBtn} onPress={openManualEntry}>
+                    <Ionicons name="create-outline" size={20} color="#6366F1" />
+                    <Text style={s.manualEntryBtnText}>Agregar manualmente</Text>
+                  </Pressable>
                   <Pressable style={s.skipBtn} onPress={closeSearch}>
                     <Text style={s.skipBtnText}>Omitir este producto</Text>
                   </Pressable>
@@ -502,6 +581,80 @@ export default function ScanScreen() {
               ) : null
             }
           />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Manual Entry Modal */}
+      <Modal visible={showManual} animationType="slide">
+        <SafeAreaView style={s.container}>
+          <View style={s.header}>
+            <Pressable onPress={closeManual} style={{ padding: 8 }}>
+              <Ionicons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.headerTitle}>Agregar Producto</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+              {/* Photo preview */}
+              {capturedPhotoUri && (
+                <View style={s.manualPhotoWrap}>
+                  <Image source={{ uri: capturedPhotoUri }} style={s.manualPhoto} />
+                </View>
+              )}
+
+              {/* Info box */}
+              <View style={s.manualInfoBox}>
+                <Ionicons name="information-circle" size={20} color="#3B82F6" />
+                <Text style={s.manualInfoText}>
+                  Lee los ingredientes del envase del producto y escribelos separados por coma. SanIA los analizara para determinar que tan procesado es.
+                </Text>
+              </View>
+
+              {/* Name */}
+              <Text style={s.manualLabel}>Nombre del producto *</Text>
+              <TextInput
+                style={s.manualInput}
+                placeholder="Ej: Jugo Watts Naranja"
+                placeholderTextColor="#94A3B8"
+                value={manualName}
+                onChangeText={setManualName}
+              />
+
+              {/* Brand */}
+              <Text style={s.manualLabel}>Marca</Text>
+              <TextInput
+                style={s.manualInput}
+                placeholder="Ej: Watts"
+                placeholderTextColor="#94A3B8"
+                value={manualBrand}
+                onChangeText={setManualBrand}
+              />
+
+              {/* Ingredients */}
+              <Text style={s.manualLabel}>Ingredientes (separados por coma) *</Text>
+              <TextInput
+                style={[s.manualInput, s.manualInputLarge]}
+                placeholder="Ej: agua, azucar, concentrado de naranja, colorante, acido citrico"
+                placeholderTextColor="#94A3B8"
+                value={manualIngredients}
+                onChangeText={setManualIngredients}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+
+              {/* Add button */}
+              <Pressable style={s.manualAddBtn} onPress={handleAddManual}>
+                <Ionicons name="add-circle" size={22} color="#fff" />
+                <Text style={s.manualAddBtnText}>Agregar Producto</Text>
+              </Pressable>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -566,6 +719,18 @@ const s = StyleSheet.create({
   notFoundBtnImg: { width: 40, height: 40, borderRadius: 8 },
   notFoundBtnName: { fontSize: 14, fontWeight: "500", color: "#0F172A" },
   notFoundBtnBrand: { fontSize: 12, color: "#64748B" },
+  manualEntryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: "#6366F1", gap: 8 },
+  manualEntryBtnText: { color: "#6366F1", fontWeight: "600", fontSize: 15 },
   skipBtn: { marginTop: 12, alignItems: "center", paddingVertical: 12 },
   skipBtnText: { color: "#94A3B8", fontSize: 14 },
+  // Manual entry modal
+  manualPhotoWrap: { alignItems: "center", marginBottom: 16 },
+  manualPhoto: { width: 120, height: 120, borderRadius: 16 },
+  manualInfoBox: { flexDirection: "row", backgroundColor: "#EFF6FF", borderRadius: 12, padding: 14, marginBottom: 20, gap: 10 },
+  manualInfoText: { flex: 1, color: "#1E40AF", fontSize: 13, lineHeight: 20 },
+  manualLabel: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 6, marginTop: 12 },
+  manualInput: { backgroundColor: "#F1F5F9", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: "#0F172A" },
+  manualInputLarge: { minHeight: 100, paddingTop: 12 },
+  manualAddBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 16, marginTop: 24, gap: 8 },
+  manualAddBtnText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 });

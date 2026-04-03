@@ -125,14 +125,14 @@ function analyzeIngredients(info: NutritionalInfo): IngredientAnalysis {
     if (hasAddedWater) issues.push("agua añadida");
     verdict = issues.length > 0
       ? `Minimamente procesado, pero contiene ${issues.join(" y ")}.`
-      : `Minimamente procesado con ${ingredients.length} ingredientes.`;
+      : `Minimamente procesado .`;
   } else if (badCount <= 2 && ingredients.length <= 10) {
     classification = "processed";
     const issues: string[] = [];
     if (artificialColorants.length > 0) issues.push("colorantes");
     if (preservatives.length > 0) issues.push("conservantes");
     if (hasAddedSugar) issues.push("azucar añadida");
-    verdict = `Procesado. Contiene ${issues.join(", ")}. ${ingredients.length} ingredientes en total.`;
+    verdict = `Procesado. Contiene ${issues.join(", ")}. `;
   } else {
     classification = "ultra_processed";
     const issues: string[] = [];
@@ -142,9 +142,9 @@ function analyzeIngredients(info: NutritionalInfo): IngredientAnalysis {
     if (ultraProcessedMarkers.length > 0) issues.push("quimicos ultra-procesados");
     if (flavorEnhancers.length > 0) issues.push("saborizantes artificiales");
     if (hasAddedSugar && hasAddedWater) {
-      verdict = `Ultra-procesado. Basicamente es agua con azucar y quimicos. Contiene: ${issues.join(", ")}. ${ingredients.length} ingredientes.`;
+      verdict = `Ultra-procesado. Basicamente es agua con azucar y quimicos. Contiene: ${issues.join(", ")}.`;
     } else {
-      verdict = `Ultra-procesado. Mezcla de quimicos: ${issues.join(", ")}. ${ingredients.length} ingredientes.`;
+      verdict = `Ultra-procesado. Mezcla de quimicos: ${issues.join(", ")}.`;
     }
   }
 
@@ -182,19 +182,19 @@ function calculateHealthScore(info: NutritionalInfo): {
   switch (ia.classification) {
     case "natural":
       score = 95;
-      pros.push(`100% natural — solo ${ia.totalCount} ingrediente${ia.totalCount !== 1 ? "s" : ""}`);
+      pros.push("100% natural");
       break;
     case "minimal":
       score = 75;
-      pros.push(`Minimamente procesado — ${ia.totalCount} ingredientes`);
+      pros.push("Minimamente procesado");
       break;
     case "processed":
       score = 50;
-      cons.push(`Producto procesado — ${ia.totalCount} ingredientes`);
+      cons.push("Producto procesado");
       break;
     case "ultra_processed":
       score = 20;
-      warnings.push(`Ultra-procesado — ${ia.totalCount} ingredientes`);
+      warnings.push("Ultra-procesado");
       break;
   }
 

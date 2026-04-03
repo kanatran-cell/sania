@@ -49,11 +49,11 @@ function analyzeIngredients(info: NutritionalInfo): IngredientAnalysis {
     classification = "ultra_processed";
     verdict = "Ultra-procesado.";
   } else if (ingredients.length === 0 && additivesCount > 0) {
-    classification = "processed";
-    verdict = "Procesado.";
+    classification = "ultra_processed";
+    verdict = "Sin ingredientes detallados. Contiene aditivos.";
   } else if (ingredients.length === 0) {
-    classification = "processed";
-    verdict = "Sin informacion de ingredientes disponible.";
+    classification = "ultra_processed";
+    verdict = "Sin informacion de ingredientes. No se puede verificar que es seguro.";
   } else if (level1Count > 0) {
     // Any level 1 ingredient = ultra processed
     classification = "ultra_processed";

@@ -29,7 +29,7 @@ export async function lookupBarcode(barcode: string): Promise<ProductLookupResul
   const p = data.product;
   const n = p.nutriments || {};
 
-  const name = p.product_name || p.product_name_es || "Producto";
+  const name = extractName(p);
   const brand = p.brands || "Marca desconocida";
 
   console.log("[SanIA] Found product:", name, "by", brand);
@@ -132,9 +132,29 @@ function round(val: number): number {
 }
 
 function extractIngredients(product: Record<string, unknown>): string[] {
-  const text = (product.ingredients_text_es || product.ingredients_text || "") as string;
+  // Prefer Spanish, then any language available
+  const text = (
+    product.ingredients_text_es ||
+    product.ingredients_text_with_allergens_es ||
+    product.ingredients_text ||
+    product.ingredients_text_with_allergens ||
+    ""
+  ) as string;
   if (!text) return [];
-  return text.split(/[,;]/).map((i) => i.trim()).filter((i) => i.length > 1 && i.length < 80).slice(0, 30);
+  return text
+    .replace(/_/g, "")
+    .split(/[,;]/)
+    .map((i) => i.trim().replace(/^\d+[.)\s]+/, ""))
+    .filter((i) => i.length > 1 && i.length < 80)
+    .slice(0, 30);
+}
+
+function extractName(product: Record<string, unknown>): string {
+  return (
+    (product.product_name_es as string) ||
+    (product.product_name as string) ||
+    "Producto"
+  );
 }
 
 function extractAdditives(product: Record<string, unknown>): string[] {

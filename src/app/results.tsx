@@ -154,6 +154,16 @@ function ProductCard({ product, rank, imageUri, isWinner }: {
       {ia && <ClassBadge ia={ia} />}
       {ia && <Text style={s.cardVerdict}>{ia.verdict}</Text>}
 
+      {/* No ingredients warning */}
+      {product.nutritionalInfo.ingredients.length === 0 && (
+        <View style={s.noIngredientsWarn}>
+          <Ionicons name="alert-circle" size={18} color="#DC2626" />
+          <Text style={s.noIngredientsText}>
+            Este producto no tiene ingredientes detallados en la base de datos. El puntaje puede no ser preciso.
+          </Text>
+        </View>
+      )}
+
       {/* Harmful ingredients by level */}
       {ia && ia.harmfulMatches.length > 0 && (
         <View style={s.harmfulSection}>
@@ -233,6 +243,8 @@ const s = StyleSheet.create({
   badgeRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 6, gap: 6 },
   badgeText: { fontSize: 13, flex: 1, lineHeight: 18 },
   // Ingredients
+  noIngredientsWarn: { flexDirection: "row", alignItems: "flex-start", backgroundColor: "#FEF2F2", borderRadius: 10, padding: 12, marginTop: 10, gap: 8 },
+  noIngredientsText: { flex: 1, color: "#DC2626", fontSize: 13, lineHeight: 18 },
   ingredientsList: { marginTop: 12, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12 },
   ingredientsTitle: { fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 4 },
   ingredientsText: { fontSize: 12, color: "#374151", lineHeight: 18 },
